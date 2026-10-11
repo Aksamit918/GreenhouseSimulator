@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="Greenhouse.Core/GreenhouseSimulator.Core.csproj" />
+  <Project Path="Greenhouse.UI/GreenhouseSimulator.UI.csproj" />
+</Solution>
