@@ -9,5 +9,6 @@ namespace GreenhouseSimulator.Core.Services
     {
         void SavePlan(GrowingPlan plan);
         GrowingPlan LoadPlan(string cropName);
+        IReadOnlyList<string> ListPlans();
     }
 }

@@ -1,5 +1,6 @@
 ﻿using GreenhouseSimulator.Core.Models.Plans;
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
 
@@ -54,6 +55,21 @@ namespace GreenhouseSimulator.Core.Services
                 throw new InvalidOperationException($"Failed to load growing plan from '{filePath}'.");
 
             return plan;
+        }
+
+        public IReadOnlyList<string> ListPlans()
+        {
+            var names = new List<string>();
+
+            foreach (string filePath in Directory.GetFiles(_directoryPath, "*.json"))
+            {
+                string? cropName = Path.GetFileNameWithoutExtension(filePath);
+                if (!string.IsNullOrWhiteSpace(cropName))
+                    names.Add(cropName);
+            }
+
+            names.Sort(StringComparer.OrdinalIgnoreCase);
+            return names;
         }
 
         private string GetFilePath(string cropName)

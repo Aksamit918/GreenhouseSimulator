@@ -39,7 +39,9 @@ namespace GreenhouseSimulator.Core.Controllers
         public void StartCycle(string planName)
         {
             if (string.IsNullOrWhiteSpace(planName))
+            {
                 throw new ArgumentException("Plan name cannot be empty.", nameof(planName));
+            }
 
             _activePlan = _repository.LoadPlan(planName);
 
@@ -65,7 +67,9 @@ namespace GreenhouseSimulator.Core.Controllers
         public void SimulationTick()
         {
             if (!_isRunning || _activePlan == null)
-                return;
+            {
+                return; 
+            }
 
             try
             {
