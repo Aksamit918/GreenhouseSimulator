@@ -4,7 +4,7 @@ using GreenhouseSimulator.Core.Models.Plans;
 using GreenhouseSimulator.Core.Models.Sensors;
 using GreenhouseSimulator.Core.Services;
 using System;
-using System.Collections.Generic;
+using System.Linq;
 
 namespace GreenhouseSimulator.Core.Controllers
 {
@@ -15,12 +15,14 @@ namespace GreenhouseSimulator.Core.Controllers
         private readonly Greenhouse _greenhouse;
         private readonly IPlanRepository _repository;
         private GrowingPlan? _activePlan;
-        private int _currentDay;
         private bool _isRunning;
 
         public Greenhouse Greenhouse => _greenhouse;
         public GrowingPlan? ActivePlan => _activePlan;
-        public int CurrentDay => _currentDay;
+        public DateTime? StartDate { get; private set; }
+        public int ElapsedHours { get; private set; }
+        public int CurrentDay => ElapsedHours / 24 + 1;
+        public int HourOfDay => ElapsedHours % 24;
         public bool IsRunning => _isRunning;
 
         public GreenhouseController(Greenhouse greenhouse, IPlanRepository repository)
@@ -28,7 +30,7 @@ namespace GreenhouseSimulator.Core.Controllers
             _greenhouse = greenhouse ?? throw new ArgumentNullException(nameof(greenhouse));
             _repository = repository ?? throw new ArgumentNullException(nameof(repository));
             _activePlan = null;
-            _currentDay = 0;
+            ElapsedHours = 0;
             _isRunning = false;
 
             SubscribeToActiveSensors();
@@ -41,10 +43,13 @@ namespace GreenhouseSimulator.Core.Controllers
 
             _activePlan = _repository.LoadPlan(planName);
 
-            _currentDay = 1;
+            StartDate = DateTime.Now;
+            ElapsedHours = 0;
             _isRunning = true;
 
-            RegulateEnvironment();
+            PlanPhase phase = _activePlan.GetPhaseForDay(CurrentDay);
+            ApplySensorThresholds(phase);
+            RegulateEnvironment(phase);
         }
 
         public void StopCycle()
@@ -53,7 +58,7 @@ namespace GreenhouseSimulator.Core.Controllers
 
             foreach (var actuator in _greenhouse.GetAllActuators())
             {
-                actuator.Stop();
+                actuator.TurnOff();
             }
         }
 
@@ -64,15 +69,17 @@ namespace GreenhouseSimulator.Core.Controllers
 
             try
             {
-                RegulateEnvironment();
+                PlanPhase phase = _activePlan.GetPhaseForDay(CurrentDay);
+                ApplySensorThresholds(phase);
+                RegulateEnvironment(phase);
+                _greenhouse.Tick(phase);
 
-                if (_currentDay >= _activePlan.TotalDurationDays)
+                ElapsedHours++;
+
+                if (ElapsedHours >= _activePlan.TotalDurationDays * 24)
                 {
                     StopCycle();
-                    return;
                 }
-
-                _currentDay++;
             }
             catch (Exception)
             {
@@ -81,37 +88,94 @@ namespace GreenhouseSimulator.Core.Controllers
             }
         }
 
-        private void RegulateEnvironment()
+        private void RegulateEnvironment(PlanPhase phase)
         {
-            if (_activePlan == null)
-                return;
+            bool tooCold = _greenhouse.CurrentTemperature < phase.TempCorridor.MinValue;
+            bool tooHot = _greenhouse.CurrentTemperature > phase.TempCorridor.MaxValue;
+            bool tooDry = _greenhouse.CurrentHumidity < phase.HumidityCorridor.MinValue;
+            bool tooHumid = _greenhouse.CurrentHumidity > phase.HumidityCorridor.MaxValue;
+            bool phLow = _greenhouse.CurrentPh < phase.PhCorridor.MinValue;
+            bool phAtTarget = _greenhouse.CurrentPh >= phase.PhCorridor.TargetValue;
+            bool lightsOn = HourOfDay < phase.LightDurationHours;
 
-            PlanPhase currentPhase = _activePlan.GetPhaseForDay(_currentDay);
+            bool heaterOn = tooCold;
+            bool acOn = tooHot;
+            bool humidifierOn = tooDry;
+
+            if (tooDry)
+                heaterOn = false;
+
+            if (tooHumid)
+            {
+                heaterOn = true;
+                humidifierOn = false;
+            }
 
             foreach (var actuator in _greenhouse.GetAllActuators())
             {
                 switch (actuator)
                 {
-                    case HeatingAndCoolingSystem heater:
-                        heater.Regulate(currentPhase.TempCorridor.TargetValue);
+                    case Heater heater:
+                        SetPower(heater, heaterOn);
                         break;
 
-                    case VentilationSystem ventilation:
-                        ventilation.Regulate(currentPhase.HumidityCorridor.TargetValue);
+                    case AirConditioner conditioner:
+                        SetPower(conditioner, acOn);
+                        break;
+
+                    case Humidifier humidifier:
+                        SetPower(humidifier, humidifierOn);
                         break;
 
                     case LightingSystem lighting:
-                        lighting.Regulate(currentPhase.LightDurationHours > 0);
+                        SetPower(lighting, lightsOn);
                         break;
 
-                    case NutrientDosingSystem nutrientDoser:
-                        nutrientDoser.Regulate(currentPhase.NutrientCorridor.TargetValue);
-                        break;
-
-                    case PhRegulationSystem phRegulator:
-                        phRegulator.Regulate(currentPhase.PhCorridor.TargetValue);
+                    case FertilizerDoser doser:
+                        if (phAtTarget)
+                        {
+                            doser.TurnOff();
+                        }
+                        else if (phLow)
+                        {
+                            doser.TurnOn();
+                        }
                         break;
                 }
+            }
+        }
+
+        private void ApplySensorThresholds(PlanPhase phase)
+        {
+            foreach (var sensor in _greenhouse.GetAllSensors().OfType<ActiveSensor>())
+            {
+                ParameterCorridor? corridor = sensor.Type switch
+                {
+                    SensorType.Temperature => phase.TempCorridor,
+                    SensorType.Humidity => phase.HumidityCorridor,
+                    SensorType.Ph => phase.PhCorridor,
+                    SensorType.Nutrient => phase.NutrientCorridor,
+                    _ => null
+                };
+
+                if (corridor == null)
+                {
+                    continue;
+                }
+
+                sensor.SetThresholds(corridor.TargetValue, corridor.GetTolerance(corridor.TargetValue));
+            }
+        }
+
+        private static void SetPower(IActuator actuator, bool on)
+        {
+            if (on)
+            {
+                actuator.TurnOn();
+            }
+            else
+            { 
+                actuator.TurnOff(); 
             }
         }
 
@@ -132,4 +196,3 @@ namespace GreenhouseSimulator.Core.Controllers
         }
     }
 }
-    

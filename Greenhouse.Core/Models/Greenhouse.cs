@@ -1,27 +1,57 @@
 ﻿using GreenhouseSimulator.Core.Models.Actuators;
+using GreenhouseSimulator.Core.Models.Plans;
 using GreenhouseSimulator.Core.Models.Sensors;
 using System;
 using System.Collections.Generic;
-using System.Text;
 
 namespace GreenhouseSimulator.Core.Models
 {
     public class Greenhouse
     {
+        private const double DefaultAmbientTemperature = 20.0;
+        private const double DefaultAmbientHumidity = 60.0;
+        private const double DefaultWaterPh = 7.0;
+        private const double DefaultWaterNutrientPpm = 200.0;
+        private const double DefaultAmbientLightLux = 0.0;
+
+        private const double TemperatureNoiseAmplitude = 0.4;
+        private const double HumidityNoiseAmplitude = 1.5;
+        private const double PhNoiseAmplitude = 0.04;
+        private const double NutrientNoiseAmplitude = 8.0;
+        private const double CorridorPaddingFraction = 0.1;
+
+        private const double MinHumidity = 0.0;
+        private const double MaxHumidity = 100.0;
+        private const double MinPh = 0.0;
+        private const double MaxPh = 14.0;
+
         public double Width { get; }
         public double Length { get; }
+        public double CurrentTemperature { get; private set; }
+        public double CurrentHumidity { get; private set; }
+        public double CurrentPh { get; private set; }
+        public double CurrentNutrientPpm { get; private set; }
+        public double CurrentLightLux { get; private set; }
+
         private readonly List<Sensor> _sensors;
         private readonly List<IActuator> _actuators;
 
         public Greenhouse(double width, double length)
         {
             if (width <= 0 || length <= 0)
-                throw new ArgumentOutOfRangeException("Width and length must be greater than zero.");
+                throw new ArgumentOutOfRangeException("Width and length must be positive.");
 
             Width = width;
             Length = length;
+
             _sensors = new List<Sensor>();
             _actuators = new List<IActuator>();
+
+            CurrentTemperature = DefaultAmbientTemperature;
+            CurrentHumidity = DefaultAmbientHumidity;
+            CurrentPh = DefaultWaterPh;
+            CurrentNutrientPpm = DefaultWaterNutrientPpm;
+            CurrentLightLux = DefaultAmbientLightLux;
         }
 
         public void AddSensor(Sensor sensor)
@@ -39,5 +69,110 @@ namespace GreenhouseSimulator.Core.Models
         }
 
         public List<IActuator> GetAllActuators() => new List<IActuator>(_actuators);
+
+        public void Tick(PlanPhase phase)
+        {
+            ArgumentNullException.ThrowIfNull(phase);
+
+            ApplyNoise();
+            ApplyActuatorEffects();
+            ClampEnvironment(phase);
+            UpdateSensors();
+        }
+
+        private void ApplyNoise()
+        {
+            CurrentTemperature += RandomNoise(TemperatureNoiseAmplitude);
+            CurrentHumidity += RandomNoise(HumidityNoiseAmplitude);
+            CurrentPh += RandomNoise(PhNoiseAmplitude);
+            CurrentNutrientPpm += RandomNoise(NutrientNoiseAmplitude);
+        }
+
+        private static double RandomNoise(double amplitude)
+        {
+            return amplitude * (Random.Shared.NextDouble() * 2.0 - 1.0);
+        }
+
+        private void ApplyActuatorEffects()
+        {
+            CurrentLightLux = DefaultAmbientLightLux;
+
+            foreach (var actuator in _actuators)
+            {
+                switch (actuator)
+                {
+                    case Heater heater:
+                        CurrentTemperature += heater.TemperatureDelta;
+                        CurrentHumidity += heater.HumidityDelta;
+                        break;
+
+                    case AirConditioner conditioner:
+                        CurrentTemperature += conditioner.TemperatureDelta;
+                        break;
+
+                    case Humidifier humidifier:
+                        CurrentHumidity += humidifier.HumidityDelta;
+                        break;
+
+                    case LightingSystem lighting:
+                        CurrentLightLux += lighting.CurrentOutputLux;
+                        break;
+
+                    case FertilizerDoser doser:
+                        CurrentPh += doser.PhDelta;
+                        CurrentNutrientPpm += doser.NutrientDelta;
+                        break;
+                }
+            }
+        }
+
+        private void ClampEnvironment(PlanPhase phase)
+        {
+            CurrentTemperature = ClampToWideCorridor(CurrentTemperature, phase.TempCorridor);
+            CurrentHumidity = ClampToWideCorridor(CurrentHumidity, phase.HumidityCorridor);
+            CurrentPh = ClampToWideCorridor(CurrentPh, phase.PhCorridor);
+            CurrentNutrientPpm = ClampToWideCorridor(CurrentNutrientPpm, phase.NutrientCorridor);
+
+            CurrentHumidity = Math.Clamp(CurrentHumidity, MinHumidity, MaxHumidity);
+            CurrentPh = Math.Clamp(CurrentPh, MinPh, MaxPh);
+            CurrentNutrientPpm = Math.Max(0.0, CurrentNutrientPpm);
+            CurrentLightLux = Math.Max(0.0, CurrentLightLux);
+        }
+
+        private static double ClampToWideCorridor(double value, ParameterCorridor corridor)
+        {
+            double width = corridor.MaxValue - corridor.MinValue;
+            double padding = CorridorPaddingFraction * width;
+            return Math.Clamp(value, corridor.MinValue - padding, corridor.MaxValue + padding);
+        }
+
+        private void UpdateSensors()
+        {
+            foreach (var sensor in _sensors)
+            {
+                switch (sensor.Type)
+                {
+                    case SensorType.Temperature:
+                        sensor.UpdateMeasurement(CurrentTemperature);
+                        break;
+
+                    case SensorType.Humidity:
+                        sensor.UpdateMeasurement(CurrentHumidity);
+                        break;
+
+                    case SensorType.Ph:
+                        sensor.UpdateMeasurement(CurrentPh);
+                        break;
+
+                    case SensorType.Nutrient:
+                        sensor.UpdateMeasurement(CurrentNutrientPpm);
+                        break;
+
+                    case SensorType.Light:
+                        sensor.UpdateMeasurement(CurrentLightLux);
+                        break;
+                }
+            }
+        }
     }
 }
