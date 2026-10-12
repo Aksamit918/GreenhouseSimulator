@@ -1,7 +1,6 @@
 ﻿using GreenhouseSimulator.Core.Models.Plans;
 using System;
-using System.Collections.Generic;
-using System.Text;
+using System.IO;
 using System.Text.Json;
 
 namespace GreenhouseSimulator.Core.Services
@@ -19,25 +18,22 @@ namespace GreenhouseSimulator.Core.Services
             _directoryPath = directoryPath;
 
             if (!Directory.Exists(_directoryPath))
-            {
                 Directory.CreateDirectory(_directoryPath);
-            }
 
             _jsonOptions = new JsonSerializerOptions
             {
                 WriteIndented = true,
-                PropertyNameCaseInsensitive = true
+                PropertyNameCaseInsensitive = true,
+                PropertyNamingPolicy = JsonNamingPolicy.CamelCase
             };
         }
 
         public void SavePlan(GrowingPlan plan)
         {
-            if (plan == null)
-                throw new ArgumentNullException(nameof(plan));
+            ArgumentNullException.ThrowIfNull(plan);
 
             string filePath = GetFilePath(plan.CropName);
             string json = JsonSerializer.Serialize(plan, _jsonOptions);
-
             File.WriteAllText(filePath, json);
         }
 
@@ -49,17 +45,13 @@ namespace GreenhouseSimulator.Core.Services
             string filePath = GetFilePath(cropName);
 
             if (!File.Exists(filePath))
-            {
                 throw new FileNotFoundException($"Growing plan for '{cropName}' not found.", filePath);
-            }
 
             string json = File.ReadAllText(filePath);
             var plan = JsonSerializer.Deserialize<GrowingPlan>(json, _jsonOptions);
 
-            if (plan == null)
-            {
+            if (plan == null || string.IsNullOrWhiteSpace(plan.CropName) || plan.Phases.Count == 0)
                 throw new InvalidOperationException($"Failed to load growing plan from '{filePath}'.");
-            }
 
             return plan;
         }

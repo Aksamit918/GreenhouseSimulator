@@ -1,0 +1,29 @@
+{
+  "cropName": "Tulips",
+  "phases": [
+    {
+      "dayNumber": 1,
+      "tempCorridor": { "minValue": 22, "maxValue": 28, "targetValue": 25 },
+      "phCorridor": { "minValue": 5.5, "maxValue": 6.5, "targetValue": 6.0 },
+      "humidityCorridor": { "minValue": 60, "maxValue": 80, "targetValue": 70 },
+      "nutrientCorridor": { "minValue": 200, "maxValue": 400, "targetValue": 300 },
+      "lightDurationHours": 14
+    },
+    {
+      "dayNumber": 2,
+      "tempCorridor": { "minValue": 22, "maxValue": 28, "targetValue": 25 },
+      "phCorridor": { "minValue": 5.5, "maxValue": 6.5, "targetValue": 6.0 },
+      "humidityCorridor": { "minValue": 60, "maxValue": 80, "targetValue": 70 },
+      "nutrientCorridor": { "minValue": 200, "maxValue": 400, "targetValue": 300 },
+      "lightDurationHours": 14
+    },
+    {
+      "dayNumber": 3,
+      "tempCorridor": { "minValue": 20, "maxValue": 26, "targetValue": 23 },
+      "phCorridor": { "minValue": 5.5, "maxValue": 6.5, "targetValue": 6.0 },
+      "humidityCorridor": { "minValue": 55, "maxValue": 75, "targetValue": 65 },
+      "nutrientCorridor": { "minValue": 250, "maxValue": 450, "targetValue": 350 },
+      "lightDurationHours": 12
+    }
+  ]
+}
