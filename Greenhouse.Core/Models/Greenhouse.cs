@@ -70,13 +70,13 @@ namespace GreenhouseSimulator.Core.Models
 
         public List<IActuator> GetAllActuators() => new List<IActuator>(_actuators);
 
-        public void Tick(PlanPhase phase)
+        public void Tick(PlanPhase phase, int hourOfDay)
         {
             ArgumentNullException.ThrowIfNull(phase);
 
             ApplyNoise();
             ApplyActuatorEffects();
-            ClampEnvironment(phase);
+            ClampEnvironment(phase, hourOfDay);
             UpdateSensors();
         }
 
@@ -126,9 +126,9 @@ namespace GreenhouseSimulator.Core.Models
             }
         }
 
-        private void ClampEnvironment(PlanPhase phase)
+        private void ClampEnvironment(PlanPhase phase, int hourOfDay)
         {
-            CurrentTemperature = ClampToWideCorridor(CurrentTemperature, phase.TempCorridor);
+            CurrentTemperature = ClampToWideCorridor(CurrentTemperature, phase.GetTempCorridor(hourOfDay));
             CurrentHumidity = ClampToWideCorridor(CurrentHumidity, phase.HumidityCorridor);
             CurrentPh = ClampToWideCorridor(CurrentPh, phase.PhCorridor);
             CurrentNutrientPpm = ClampToWideCorridor(CurrentNutrientPpm, phase.NutrientCorridor);

@@ -3,7 +3,9 @@
   "phases": [
     {
       "dayNumber": 1,
-      "tempCorridor": { "minValue": 22, "maxValue": 28, "targetValue": 25 },
+      "tempCorridor": { "minValue": 26, "maxValue": 30, "targetValue": 28 },
+      "nightTempCorridor": { "minValue": 20, "maxValue": 24, "targetValue": 22 },
+      "dayDurationHours": 16,
       "phCorridor": { "minValue": 5.5, "maxValue": 6.5, "targetValue": 6.0 },
       "humidityCorridor": { "minValue": 60, "maxValue": 80, "targetValue": 70 },
       "nutrientCorridor": { "minValue": 200, "maxValue": 400, "targetValue": 300 },
@@ -11,7 +13,9 @@
     },
     {
       "dayNumber": 2,
-      "tempCorridor": { "minValue": 22, "maxValue": 28, "targetValue": 25 },
+      "tempCorridor": { "minValue": 26, "maxValue": 30, "targetValue": 28 },
+      "nightTempCorridor": { "minValue": 20, "maxValue": 24, "targetValue": 22 },
+      "dayDurationHours": 16,
       "phCorridor": { "minValue": 5.5, "maxValue": 6.5, "targetValue": 6.0 },
       "humidityCorridor": { "minValue": 60, "maxValue": 80, "targetValue": 70 },
       "nutrientCorridor": { "minValue": 200, "maxValue": 400, "targetValue": 300 },
@@ -19,7 +23,9 @@
     },
     {
       "dayNumber": 3,
-      "tempCorridor": { "minValue": 20, "maxValue": 26, "targetValue": 23 },
+      "tempCorridor": { "minValue": 24, "maxValue": 28, "targetValue": 26 },
+      "nightTempCorridor": { "minValue": 18, "maxValue": 22, "targetValue": 20 },
+      "dayDurationHours": 16,
       "phCorridor": { "minValue": 5.5, "maxValue": 6.5, "targetValue": 6.0 },
       "humidityCorridor": { "minValue": 55, "maxValue": 75, "targetValue": 65 },
       "nutrientCorridor": { "minValue": 250, "maxValue": 450, "targetValue": 350 },

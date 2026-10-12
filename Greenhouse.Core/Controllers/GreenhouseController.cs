@@ -76,7 +76,7 @@ namespace GreenhouseSimulator.Core.Controllers
                 PlanPhase phase = _activePlan.GetPhaseForDay(CurrentDay);
                 ApplySensorThresholds(phase);
                 RegulateEnvironment(phase);
-                _greenhouse.Tick(phase);
+                _greenhouse.Tick(phase, HourOfDay);
 
                 ElapsedHours++;
 
@@ -94,8 +94,9 @@ namespace GreenhouseSimulator.Core.Controllers
 
         private void RegulateEnvironment(PlanPhase phase)
         {
-            bool tooCold = _greenhouse.CurrentTemperature < phase.TempCorridor.MinValue;
-            bool tooHot = _greenhouse.CurrentTemperature > phase.TempCorridor.MaxValue;
+            ParameterCorridor tempCorridor = phase.GetTempCorridor(HourOfDay);
+            bool tooCold = _greenhouse.CurrentTemperature < tempCorridor.MinValue;
+            bool tooHot = _greenhouse.CurrentTemperature > tempCorridor.MaxValue;
             bool tooDry = _greenhouse.CurrentHumidity < phase.HumidityCorridor.MinValue;
             bool tooHumid = _greenhouse.CurrentHumidity > phase.HumidityCorridor.MaxValue;
             bool phLow = _greenhouse.CurrentPh < phase.PhCorridor.MinValue;
@@ -155,7 +156,7 @@ namespace GreenhouseSimulator.Core.Controllers
             {
                 ParameterCorridor? corridor = sensor.Type switch
                 {
-                    SensorType.Temperature => phase.TempCorridor,
+                    SensorType.Temperature => phase.GetTempCorridor(HourOfDay),
                     SensorType.Humidity => phase.HumidityCorridor,
                     SensorType.Ph => phase.PhCorridor,
                     SensorType.Nutrient => phase.NutrientCorridor,
