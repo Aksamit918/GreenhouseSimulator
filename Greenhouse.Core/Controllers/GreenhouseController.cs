@@ -16,6 +16,7 @@ namespace GreenhouseSimulator.Core.Controllers
         private readonly IPlanRepository _repository;
         private GrowingPlan? _activePlan;
         private bool _isRunning;
+        private bool _isPaused;
 
         public Greenhouse Greenhouse => _greenhouse;
         public GrowingPlan? ActivePlan => _activePlan;
@@ -24,6 +25,7 @@ namespace GreenhouseSimulator.Core.Controllers
         public int CurrentDay => ElapsedHours / 24 + 1;
         public int HourOfDay => ElapsedHours % 24;
         public bool IsRunning => _isRunning;
+        public bool IsPaused => _isPaused;
 
         public GreenhouseController(Greenhouse greenhouse, IPlanRepository repository)
         {
@@ -32,6 +34,7 @@ namespace GreenhouseSimulator.Core.Controllers
             _activePlan = null;
             ElapsedHours = 0;
             _isRunning = false;
+            _isPaused = false;
 
             SubscribeToActiveSensors();
         }
@@ -63,6 +66,7 @@ namespace GreenhouseSimulator.Core.Controllers
             StartDate = DateTime.Now;
             ElapsedHours = 0;
             _isRunning = true;
+            _isPaused = false;
 
             PlanPhase phase = _activePlan.GetPhaseForDay(CurrentDay);
             ApplySensorThresholds(phase);
@@ -72,6 +76,7 @@ namespace GreenhouseSimulator.Core.Controllers
         public void StopCycle()
         {
             _isRunning = false;
+            _isPaused = false;
 
             foreach (var actuator in _greenhouse.GetAllActuators())
             {
@@ -79,9 +84,25 @@ namespace GreenhouseSimulator.Core.Controllers
             }
         }
 
+        public void Pause()
+        {
+            if (!_isRunning)
+                throw new InvalidOperationException("Cannot pause a cycle that is not running.");
+
+            _isPaused = true;
+        }
+
+        public void Resume()
+        {
+            if (!_isRunning)
+                throw new InvalidOperationException("Cannot resume a cycle that is not running.");
+
+            _isPaused = false;
+        }
+
         public void SimulationTick()
         {
-            if (!_isRunning || _activePlan == null)
+            if (!_isRunning || _isPaused || _activePlan == null)
             {
                 return; 
             }

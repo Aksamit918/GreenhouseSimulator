@@ -91,7 +91,6 @@ namespace Greenhouse.UI
             UpdateUI(); 
         }
 
-        // ОБНОВЛЕННЫЙ МЕТОД С ПРИЧИНАМИ
         private void CheckActuatorChanges()
         {
             string timeStamp = $"[День {_controller.CurrentDay}, {_controller.HourOfDay}:00]";
@@ -107,7 +106,6 @@ namespace Greenhouse.UI
                     string logLine = "";
                     if (act.IsOn)
                     {
-                        // ПРИБОР ВКЛЮЧАЕТСЯ - пишем причину (текущие значения датчика)
                         if (act is Heater) 
                             logLine = $"Для повышения температуры – выключить кондиционеры и включить обогреватели. (Зафиксировано: {gh.CurrentTemperature:F1}°C)";
                         else if (act is AirConditioner) 
@@ -119,7 +117,6 @@ namespace Greenhouse.UI
                     }
                     else
                     {
-                        // ПРИБОР ВЫКЛЮЧАЕТСЯ
                         if (act is FertilizerDoser) 
                             logLine = $"При достижении заданного значения - выключить. (Текущий pH: {gh.CurrentPh:F2})";
                         else if (act is Heater) 

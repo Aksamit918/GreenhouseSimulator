@@ -10,7 +10,6 @@
             <ColumnDefinition Width="*"/>
         </Grid.ColumnDefinitions>
 
-        <!-- Левая колонка: Управление и Логи -->
         <StackPanel Grid.Column="0" Margin="0,0,15,0">
             <GroupBox Header="Управление симуляцией" Padding="10" FontWeight="Bold">
                 <StackPanel TextElement.FontWeight="Normal">
@@ -28,7 +27,6 @@
                 <TextBlock x:Name="TxtAlerts" Text="Всё в норме" Foreground="DarkGreen" TextWrapping="Wrap" TextElement.FontWeight="Normal"/>
             </GroupBox>
 
-            <!-- НОВЫЙ БЛОК: ИСТОРИЯ ДЕЙСТВИЙ -->
             <GroupBox Header="Журнал действий автоматики" Margin="0,15,0,0" Padding="10" FontWeight="Bold" Height="220">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <TextBlock x:Name="TxtHistory" TextElement.FontWeight="Normal" TextWrapping="Wrap" FontSize="11" Foreground="#333"/>
@@ -36,7 +34,6 @@
             </GroupBox>
         </StackPanel>
 
-        <!-- Правая колонка: План -->
         <GroupBox Grid.Column="1" Header="План теплицы (Вид сверху)" Padding="10" FontWeight="Bold">
             <Grid TextElement.FontWeight="Normal">
                 <Grid.RowDefinitions>
