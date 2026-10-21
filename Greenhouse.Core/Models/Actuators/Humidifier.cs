@@ -11,7 +11,7 @@ namespace GreenhouseSimulator.Core.Models.Actuators
 
         public double HumidityDelta => IsOn ? _humidityRate : 0.0;
 
-        public Humidifier(Tuple<double, double> location, double humidityRate = 3.0)
+        public Humidifier(Tuple<double, double> location, double humidityRate = 6.0)
         {
             ArgumentNullException.ThrowIfNull(location);
 

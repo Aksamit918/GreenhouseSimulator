@@ -102,9 +102,6 @@ namespace GreenhouseSimulator.Core.Controllers
             bool phLow = _greenhouse.CurrentPh < phase.PhCorridor.MinValue;
             bool phHigh = _greenhouse.CurrentPh > phase.PhCorridor.MaxValue;
             bool phAtTarget = _greenhouse.CurrentPh >= phase.PhCorridor.TargetValue;
-            bool nutrientsLow = _greenhouse.CurrentNutrientPpm < phase.NutrientCorridor.MinValue;
-            bool nutrientsHigh = _greenhouse.CurrentNutrientPpm > phase.NutrientCorridor.MaxValue;
-            bool nutrientsAtTarget = _greenhouse.CurrentNutrientPpm >= phase.NutrientCorridor.TargetValue;
             bool lightsOn = HourOfDay < phase.LightDurationHours;
 
             bool heaterOn = tooCold;
@@ -142,15 +139,11 @@ namespace GreenhouseSimulator.Core.Controllers
                         break;
 
                     case FertilizerDoser doser:
-                        if (phHigh || nutrientsHigh)
-                        {
-                            doser.TurnOff();
-                        }
-                        else if (phLow || nutrientsLow)
+                        if (phLow)
                         {
                             doser.TurnOn();
                         }
-                        else if (phAtTarget && nutrientsAtTarget)
+                        else if (phHigh || phAtTarget)
                         {
                             doser.TurnOff();
                         }
@@ -168,7 +161,6 @@ namespace GreenhouseSimulator.Core.Controllers
                     SensorType.Temperature => phase.GetTempCorridor(HourOfDay),
                     SensorType.Humidity => phase.HumidityCorridor,
                     SensorType.Ph => phase.PhCorridor,
-                    SensorType.Nutrient => phase.NutrientCorridor,
                     _ => null
                 };
 

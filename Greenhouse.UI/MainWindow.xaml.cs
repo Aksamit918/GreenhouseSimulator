@@ -245,10 +245,6 @@ namespace Greenhouse.UI
             {
                 sensorShape = new Rectangle { Width = 60, Height = 35, RadiusX = 10, RadiusY = 10, Fill = GetGradient(Colors.LightYellow, Colors.Gold) };
             }
-            else if (sensor.Type == SensorType.Nutrient)
-            {
-                sensorShape = new Rectangle { Width = 60, Height = 35, RadiusX = 10, RadiusY = 10, Fill = GetGradient(Color.FromRgb(222, 184, 135), Color.FromRgb(205, 133, 63)) };
-            }
             else 
             {
                 sensorShape = new Ellipse { Width = 60, Height = 35, Fill = GetGradient(Color.FromRgb(200, 100, 100), Color.FromRgb(150, 50, 50)) };

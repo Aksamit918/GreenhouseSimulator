@@ -11,7 +11,7 @@ namespace GreenhouseSimulator.Core.Models.Actuators
 
         public double TemperatureDelta => IsOn ? _temperatureRate : 0.0;
 
-        public AirConditioner(Tuple<double, double> location, double temperatureRate = -0.8)
+        public AirConditioner(Tuple<double, double> location, double temperatureRate = -1.5)
         {
             ArgumentNullException.ThrowIfNull(location);
 

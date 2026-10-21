@@ -13,7 +13,7 @@ namespace GreenhouseSimulator.Core.Models.Actuators
         public double TemperatureDelta => IsOn ? _temperatureRate : 0.0;
         public double HumidityDelta => IsOn ? _humidityRate : 0.0;
 
-        public Heater(Tuple<double, double> location, double temperatureRate = 0.8, double humidityRate = -2.0)
+        public Heater(Tuple<double, double> location, double temperatureRate = 1.5, double humidityRate = -4.0)
         {
             ArgumentNullException.ThrowIfNull(location);
 

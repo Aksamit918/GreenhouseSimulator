@@ -10,14 +10,13 @@ namespace GreenhouseSimulator.Core.Models
     {
         private const double DefaultAmbientTemperature = 20.0;
         private const double DefaultAmbientHumidity = 60.0;
-        private const double DefaultWaterPh = 7.0;
-        private const double DefaultWaterNutrientPpm = 200.0;
+        private const double DefaultWaterPh = 6.0;
         private const double DefaultAmbientLightLux = 0.0;
 
-        private const double TemperatureNoiseAmplitude = 0.4;
-        private const double HumidityNoiseAmplitude = 1.5;
-        private const double PhNoiseAmplitude = 0.04;
-        private const double NutrientNoiseAmplitude = 8.0;
+        private const double TemperatureNoiseAmplitude = 0.6;
+        private const double HumidityNoiseAmplitude = 2.5;
+        private const double PhNoiseAmplitude = 0.08;
+        private const double PhAcidificationPerTick = 0.12;
         private const double CorridorPaddingFraction = 0.1;
 
         private const double MinHumidity = 0.0;
@@ -30,7 +29,6 @@ namespace GreenhouseSimulator.Core.Models
         public double CurrentTemperature { get; private set; }
         public double CurrentHumidity { get; private set; }
         public double CurrentPh { get; private set; }
-        public double CurrentNutrientPpm { get; private set; }
         public double CurrentLightLux { get; private set; }
 
         private readonly List<Sensor> _sensors;
@@ -50,7 +48,6 @@ namespace GreenhouseSimulator.Core.Models
             CurrentTemperature = DefaultAmbientTemperature;
             CurrentHumidity = DefaultAmbientHumidity;
             CurrentPh = DefaultWaterPh;
-            CurrentNutrientPpm = DefaultWaterNutrientPpm;
             CurrentLightLux = DefaultAmbientLightLux;
         }
 
@@ -84,8 +81,7 @@ namespace GreenhouseSimulator.Core.Models
         {
             CurrentTemperature += RandomNoise(TemperatureNoiseAmplitude);
             CurrentHumidity += RandomNoise(HumidityNoiseAmplitude);
-            CurrentPh += RandomNoise(PhNoiseAmplitude);
-            CurrentNutrientPpm += RandomNoise(NutrientNoiseAmplitude);
+            CurrentPh += RandomNoise(PhNoiseAmplitude) - PhAcidificationPerTick;
         }
 
         private static double RandomNoise(double amplitude)
@@ -120,7 +116,6 @@ namespace GreenhouseSimulator.Core.Models
 
                     case FertilizerDoser doser:
                         CurrentPh += doser.PhDelta;
-                        CurrentNutrientPpm += doser.NutrientDelta;
                         break;
                 }
             }
@@ -131,11 +126,9 @@ namespace GreenhouseSimulator.Core.Models
             CurrentTemperature = ClampToWideCorridor(CurrentTemperature, phase.GetTempCorridor(hourOfDay));
             CurrentHumidity = ClampToWideCorridor(CurrentHumidity, phase.HumidityCorridor);
             CurrentPh = ClampToWideCorridor(CurrentPh, phase.PhCorridor);
-            CurrentNutrientPpm = ClampToWideCorridor(CurrentNutrientPpm, phase.NutrientCorridor);
 
             CurrentHumidity = Math.Clamp(CurrentHumidity, MinHumidity, MaxHumidity);
             CurrentPh = Math.Clamp(CurrentPh, MinPh, MaxPh);
-            CurrentNutrientPpm = Math.Max(0.0, CurrentNutrientPpm);
             CurrentLightLux = Math.Max(0.0, CurrentLightLux);
         }
 
@@ -162,10 +155,6 @@ namespace GreenhouseSimulator.Core.Models
 
                     case SensorType.Ph:
                         sensor.UpdateMeasurement(CurrentPh);
-                        break;
-
-                    case SensorType.Nutrient:
-                        sensor.UpdateMeasurement(CurrentNutrientPpm);
                         break;
 
                     case SensorType.Light:

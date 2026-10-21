@@ -5,7 +5,6 @@
         ParameterCorridor TempCorridor,
         ParameterCorridor PhCorridor,
         ParameterCorridor HumidityCorridor,
-        ParameterCorridor NutrientCorridor,
         int LightDurationHours,
         ParameterCorridor? NightTempCorridor = null,
         int DayDurationHours = 24)

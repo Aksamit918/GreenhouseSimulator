@@ -9,7 +9,6 @@ namespace GreenhouseSimulator.Core.Models.Sensors
         Temperature,
         Humidity,
         Ph,
-        Nutrient,
         Light
     }
 }
