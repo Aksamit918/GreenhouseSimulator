@@ -32,10 +32,16 @@ namespace GreenhouseSimulator.Core.Services
         public void SavePlan(GrowingPlan plan)
         {
             ArgumentNullException.ThrowIfNull(plan);
+            plan.EnsureValid();
 
             string filePath = GetFilePath(plan.CropName);
             string json = JsonSerializer.Serialize(plan, _jsonOptions);
             File.WriteAllText(filePath, json);
+        }
+
+        public bool Contains(string cropName)
+        {
+            return File.Exists(GetFilePath(cropName));
         }
 
         public GrowingPlan LoadPlan(string cropName)
@@ -51,9 +57,10 @@ namespace GreenhouseSimulator.Core.Services
             string json = File.ReadAllText(filePath);
             var plan = JsonSerializer.Deserialize<GrowingPlan>(json, _jsonOptions);
 
-            if (plan == null || string.IsNullOrWhiteSpace(plan.CropName) || plan.Phases.Count == 0)
+            if (plan == null)
                 throw new InvalidOperationException($"Failed to load growing plan from '{filePath}'.");
 
+            plan.EnsureValid();
             return plan;
         }
 
@@ -74,7 +81,14 @@ namespace GreenhouseSimulator.Core.Services
 
         private string GetFilePath(string cropName)
         {
-            return Path.Combine(_directoryPath, $"{cropName}.json");
+            if (string.IsNullOrWhiteSpace(cropName))
+                throw new ArgumentException("Crop name cannot be null or empty.", nameof(cropName));
+
+            string trimmed = cropName.Trim();
+            if (trimmed.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
+                throw new ArgumentException("Crop name cannot contain path or file-name characters.", nameof(cropName));
+
+            return Path.Combine(_directoryPath, $"{trimmed}.json");
         }
     }
 }

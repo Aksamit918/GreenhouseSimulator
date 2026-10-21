@@ -36,6 +36,21 @@ namespace GreenhouseSimulator.Core.Controllers
             SubscribeToActiveSensors();
         }
 
+        public IReadOnlyList<string> ListPlans() => _repository.ListPlans();
+
+        public GrowingPlan LoadPlan(string cropName) => _repository.LoadPlan(cropName);
+
+        public void AddPlan(GrowingPlan plan)
+        {
+            ArgumentNullException.ThrowIfNull(plan);
+            plan.EnsureValid();
+
+            if (_repository.Contains(plan.CropName))
+                throw new InvalidOperationException($"A growing plan for '{plan.CropName}' already exists.");
+
+            _repository.SavePlan(plan);
+        }
+
         public void StartCycle(string planName)
         {
             if (string.IsNullOrWhiteSpace(planName))

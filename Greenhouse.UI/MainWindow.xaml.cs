@@ -35,8 +35,7 @@ namespace Greenhouse.UI
                 _controller = result.controller;
                 _controller.AlertTriggered += OnAlertTriggered;
 
-                var repo = new FilePlanRepository(plansDir);
-                PlansComboBox.ItemsSource = repo.ListPlans();
+                PlansComboBox.ItemsSource = _controller.ListPlans();
                 if (PlansComboBox.Items.Count > 0) PlansComboBox.SelectedIndex = 0;
 
                 _timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
