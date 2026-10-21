@@ -8,7 +8,6 @@ namespace GreenhouseSimulator.Core.Models.Sensors
     {
         Temperature,
         Humidity,
-        Ph,
-        Light
+        Ph
     }
 }

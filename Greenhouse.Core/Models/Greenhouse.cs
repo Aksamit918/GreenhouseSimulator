@@ -11,7 +11,6 @@ namespace GreenhouseSimulator.Core.Models
         private const double DefaultAmbientTemperature = 20.0;
         private const double DefaultAmbientHumidity = 60.0;
         private const double DefaultWaterPh = 6.0;
-        private const double DefaultAmbientLightLux = 0.0;
 
         private const double TemperatureNoiseAmplitude = 0.6;
         private const double HumidityNoiseAmplitude = 2.5;
@@ -29,7 +28,6 @@ namespace GreenhouseSimulator.Core.Models
         public double CurrentTemperature { get; private set; }
         public double CurrentHumidity { get; private set; }
         public double CurrentPh { get; private set; }
-        public double CurrentLightLux { get; private set; }
 
         private readonly List<Sensor> _sensors;
         private readonly List<IActuator> _actuators;
@@ -48,7 +46,6 @@ namespace GreenhouseSimulator.Core.Models
             CurrentTemperature = DefaultAmbientTemperature;
             CurrentHumidity = DefaultAmbientHumidity;
             CurrentPh = DefaultWaterPh;
-            CurrentLightLux = DefaultAmbientLightLux;
         }
 
         public void AddSensor(Sensor sensor)
@@ -91,8 +88,6 @@ namespace GreenhouseSimulator.Core.Models
 
         private void ApplyActuatorEffects()
         {
-            CurrentLightLux = DefaultAmbientLightLux;
-
             foreach (var actuator in _actuators)
             {
                 switch (actuator)
@@ -110,10 +105,6 @@ namespace GreenhouseSimulator.Core.Models
                         CurrentHumidity += humidifier.HumidityDelta;
                         break;
 
-                    case LightingSystem lighting:
-                        CurrentLightLux += lighting.CurrentOutputLux;
-                        break;
-
                     case FertilizerDoser doser:
                         CurrentPh += doser.PhDelta;
                         break;
@@ -129,7 +120,6 @@ namespace GreenhouseSimulator.Core.Models
 
             CurrentHumidity = Math.Clamp(CurrentHumidity, MinHumidity, MaxHumidity);
             CurrentPh = Math.Clamp(CurrentPh, MinPh, MaxPh);
-            CurrentLightLux = Math.Max(0.0, CurrentLightLux);
         }
 
         private static double ClampToWideCorridor(double value, ParameterCorridor corridor)
@@ -155,10 +145,6 @@ namespace GreenhouseSimulator.Core.Models
 
                     case SensorType.Ph:
                         sensor.UpdateMeasurement(CurrentPh);
-                        break;
-
-                    case SensorType.Light:
-                        sensor.UpdateMeasurement(CurrentLightLux);
                         break;
                 }
             }

@@ -237,10 +237,6 @@ namespace Greenhouse.UI
                 textColor = Colors.White;
                 valueTxt = Math.Round(sensor.CurrentValue).ToString() + "%";
             }
-            else if (sensor.Type == SensorType.Light)
-            {
-                sensorShape = new Rectangle { Width = 60, Height = 35, RadiusX = 10, RadiusY = 10, Fill = GetGradient(Colors.LightYellow, Colors.Gold) };
-            }
             else 
             {
                 sensorShape = new Ellipse { Width = 60, Height = 35, Fill = GetGradient(Color.FromRgb(200, 100, 100), Color.FromRgb(150, 50, 50)) };
