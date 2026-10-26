@@ -19,9 +19,11 @@
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
                             <ComboBox x:Name="PlansComboBox" Padding="5" Grid.Column="0" Margin="0,0,5,0"/>
-                            <Button Content="➕" Grid.Column="1" Width="30" Click="BtnShowNewPlan_Click" ToolTip="Создать новый план" Background="#2196F3" Foreground="White"/>
+                            <Button Content="➕" Grid.Column="1" Width="30" Margin="0,0,5,0" Click="BtnShowNewPlan_Click" ToolTip="Создать новый план" Background="#2196F3" Foreground="White"/>
+                            <Button Content="✎" Grid.Column="2" Width="30" Click="BtnEditPlan_Click" ToolTip="Изменить выбранный план" Background="#607D8B" Foreground="White"/>
                         </Grid>
 
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
@@ -64,27 +66,42 @@
         </Grid>
 
         <Grid x:Name="OverlayNewPlan" Background="#80000000" Visibility="Collapsed" Panel.ZIndex="100">
-            <Border Background="White" Width="300" CornerRadius="10" Padding="20" VerticalAlignment="Center" HorizontalAlignment="Center">
-                <StackPanel>
-                    <TextBlock Text="Новый план (Базовый)" FontWeight="Bold" FontSize="16" Margin="0,0,0,15" HorizontalAlignment="Center"/>
-
-                    <TextBlock Text="Название культуры:" />
-                    <TextBox x:Name="InputCropName" Margin="0,0,0,10" Padding="4" />
-
-                    <TextBlock Text="Идеальная Температура (°C):" />
-                    <TextBox x:Name="InputTemp" Text="25" Margin="0,0,0,10" Padding="4" />
-
-                    <TextBlock Text="Идеальная Влажность (%):" />
-                    <TextBox x:Name="InputHum" Text="65" Margin="0,0,0,10" Padding="4" />
-
-                    <TextBlock Text="Идеальный уровень pH:" />
-                    <TextBox x:Name="InputPh" Text="6.0" Margin="0,0,0,20" Padding="4" />
-
-                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+            <Border Background="White" Width="340" MaxHeight="560" CornerRadius="10" Padding="20" VerticalAlignment="Center" HorizontalAlignment="Center">
+                <DockPanel>
+                    <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,15,0,0">
                         <Button Content="Отмена" Click="BtnCancelPlan_Click" Padding="15,7" Margin="0,0,10,0"/>
                         <Button Content="Сохранить" Click="BtnSavePlan_Click" Padding="15,7" Background="#4CAF50" Foreground="White"/>
                     </StackPanel>
-                </StackPanel>
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <StackPanel>
+                            <TextBlock x:Name="PlanFormTitle" Text="Новый план" FontWeight="Bold" FontSize="16" Margin="0,0,0,15" HorizontalAlignment="Center"/>
+
+                            <TextBlock Text="Название культуры:" />
+                            <TextBox x:Name="InputCropName" Margin="0,0,0,10" Padding="4" />
+
+                            <TextBlock Text="Длительность, суток:" />
+                            <TextBox x:Name="InputDuration" Text="1" Margin="0,0,0,10" Padding="4" />
+
+                            <TextBlock Text="Дневная температура (°C):" />
+                            <TextBox x:Name="InputTemp" Text="25" Margin="0,0,0,10" Padding="4" />
+
+                            <TextBlock Text="Ночная температура (°C):" />
+                            <TextBox x:Name="InputNightTemp" Text="22" Margin="0,0,0,10" Padding="4" />
+
+                            <TextBlock Text="Длина дня, часов:" />
+                            <TextBox x:Name="InputDayLength" Text="16" Margin="0,0,0,10" Padding="4" />
+
+                            <TextBlock Text="Влажность (%):" />
+                            <TextBox x:Name="InputHum" Text="65" Margin="0,0,0,10" Padding="4" />
+
+                            <TextBlock Text="Уровень pH:" />
+                            <TextBox x:Name="InputPh" Text="6.0" Margin="0,0,0,10" Padding="4" />
+
+                            <TextBlock Text="Освещение, часов:" />
+                            <TextBox x:Name="InputLight" Text="14" Margin="0,0,0,0" Padding="4" />
+                        </StackPanel>
+                    </ScrollViewer>
+                </DockPanel>
             </Border>
         </Grid>
     </Grid>

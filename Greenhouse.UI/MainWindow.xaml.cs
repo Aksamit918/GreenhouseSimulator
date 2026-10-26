@@ -20,6 +20,11 @@ namespace Greenhouse.UI
         private DispatcherTimer _timer;
         private List<string> _currentAlerts = new List<string>();
         private Dictionary<string, bool> _actuatorStates = new Dictionary<string, bool>();
+        private bool _editingExistingPlan;
+        private double _tempSpread = 2;
+        private double _nightTempSpread = 2;
+        private double _humiditySpread = 5;
+        private double _phSpread = 0.5;
 
         public MainWindow()
         {
@@ -111,7 +116,61 @@ namespace Greenhouse.UI
 
         private void BtnShowNewPlan_Click(object sender, RoutedEventArgs e)
         {
+            _editingExistingPlan = false;
+            _tempSpread = 2;
+            _nightTempSpread = 2;
+            _humiditySpread = 5;
+            _phSpread = 0.5;
+
+            PlanFormTitle.Text = "Новый план";
+            InputCropName.IsEnabled = true;
+            InputCropName.Text = "";
+            InputDuration.Text = "1";
+            InputTemp.Text = "25";
+            InputNightTemp.Text = "22";
+            InputDayLength.Text = "16";
+            InputHum.Text = "65";
+            InputPh.Text = "6.0";
+            InputLight.Text = "14";
             OverlayNewPlan.Visibility = Visibility.Visible;
+        }
+
+        private void BtnEditPlan_Click(object sender, RoutedEventArgs e)
+        {
+            string? selected = PlansComboBox.SelectedItem?.ToString();
+            if (string.IsNullOrWhiteSpace(selected))
+            {
+                MessageBox.Show("Сначала выберите план.", "План", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            try
+            {
+                GrowingPlan plan = _controller.LoadPlan(selected);
+                PlanPhase phase = plan.GetPhaseForDay(1);
+
+                _editingExistingPlan = true;
+                _tempSpread = Spread(phase.TempCorridor);
+                _nightTempSpread = phase.NightTempCorridor == null ? _tempSpread : Spread(phase.NightTempCorridor);
+                _humiditySpread = Spread(phase.HumidityCorridor);
+                _phSpread = Spread(phase.PhCorridor);
+
+                PlanFormTitle.Text = "Изменить план";
+                InputCropName.IsEnabled = false;
+                InputCropName.Text = plan.CropName;
+                InputDuration.Text = plan.TotalDurationDays.ToString();
+                InputTemp.Text = phase.TempCorridor.TargetValue.ToString();
+                InputNightTemp.Text = (phase.NightTempCorridor?.TargetValue ?? phase.TempCorridor.TargetValue).ToString();
+                InputDayLength.Text = phase.DayDurationHours.ToString();
+                InputHum.Text = phase.HumidityCorridor.TargetValue.ToString();
+                InputPh.Text = phase.PhCorridor.TargetValue.ToString();
+                InputLight.Text = phase.LightDurationHours.ToString();
+                OverlayNewPlan.Visibility = Visibility.Visible;
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Не удалось открыть план:\n{ex.Message}", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
         }
 
         private void BtnCancelPlan_Click(object sender, RoutedEventArgs e)
@@ -123,31 +182,58 @@ namespace Greenhouse.UI
         {
             try
             {
-                string name = InputCropName.Text;
-                double temp = double.Parse(InputTemp.Text.Replace(".", ","));
-                double hum = double.Parse(InputHum.Text.Replace(".", ","));
-                double ph = double.Parse(InputPh.Text.Replace(".", ","));
+                int days = int.Parse(InputDuration.Text);
+                int dayLength = int.Parse(InputDayLength.Text);
+                int lightHours = int.Parse(InputLight.Text);
+                double dayTemp = ParseUserNumber(InputTemp.Text);
+                double nightTemp = ParseUserNumber(InputNightTemp.Text);
+                double humidity = ParseUserNumber(InputHum.Text);
+                double ph = ParseUserNumber(InputPh.Text);
 
-                var tempC = new ParameterCorridor(temp - 2, temp + 2, temp);
-                var humC = new ParameterCorridor(hum - 5, hum + 5, hum);
-                var phC = new ParameterCorridor(ph - 0.5, ph + 0.5, ph);
+                var plan = new GrowingPlan(InputCropName.Text);
+                for (int day = 1; day <= days; day++)
+                {
+                    plan.AddPhase(new PlanPhase(
+                        day,
+                        Corridor(dayTemp, _tempSpread),
+                        Corridor(ph, _phSpread),
+                        Corridor(humidity, _humiditySpread),
+                        lightHours,
+                        Corridor(nightTemp, _nightTempSpread),
+                        dayLength));
+                }
 
-                var plan = new GrowingPlan(name);
-                plan.AddPhase(new PlanPhase(1, tempC, phC, humC, 14));
-
-                _controller.AddPlan(plan);
+                if (_editingExistingPlan)
+                    _controller.UpdatePlan(plan);
+                else
+                    _controller.AddPlan(plan);
 
                 PlansComboBox.ItemsSource = _controller.ListPlans();
-                PlansComboBox.SelectedItem = name;
-
+                PlansComboBox.SelectedItem = plan.CropName;
                 OverlayNewPlan.Visibility = Visibility.Collapsed;
-                InputCropName.Clear();
-                MessageBox.Show($"План '{name}' успешно создан и сохранен!", "Успех", MessageBoxButton.OK, MessageBoxImage.Information);
+
+                string action = _editingExistingPlan ? "обновлён" : "создан";
+                MessageBox.Show($"План '{plan.CropName}' {action} и сохранён.", "Успех", MessageBoxButton.OK, MessageBoxImage.Information);
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Ошибка при создании плана:\n{ex.Message}", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show($"Ошибка при сохранении плана:\n{ex.Message}", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
             }
+        }
+
+        private static double ParseUserNumber(string text)
+        {
+            return double.Parse(text.Trim().Replace('.', ','));
+        }
+
+        private static double Spread(ParameterCorridor corridor)
+        {
+            return Math.Max(corridor.TargetValue - corridor.MinValue, corridor.MaxValue - corridor.TargetValue);
+        }
+
+        private static ParameterCorridor Corridor(double target, double spread)
+        {
+            return new ParameterCorridor(target - spread, target + spread, target);
         }
 
         private void Timer_Tick(object sender, EventArgs e)

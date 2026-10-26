@@ -54,6 +54,23 @@ namespace GreenhouseSimulator.Core.Controllers
             _repository.SavePlan(plan);
         }
 
+        public void UpdatePlan(GrowingPlan plan)
+        {
+            ArgumentNullException.ThrowIfNull(plan);
+            plan.EnsureValid();
+
+            if (!_repository.Contains(plan.CropName))
+                throw new InvalidOperationException($"A growing plan for '{plan.CropName}' does not exist.");
+
+            _repository.SavePlan(plan);
+
+            if (_activePlan != null
+                && string.Equals(_activePlan.CropName, plan.CropName, StringComparison.OrdinalIgnoreCase))
+            {
+                _activePlan = plan;
+            }
+        }
+
         public void StartCycle(string planName)
         {
             if (string.IsNullOrWhiteSpace(planName))
