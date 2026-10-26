@@ -4,6 +4,7 @@ using GreenhouseSimulator.Core.Models.Plans;
 using GreenhouseSimulator.Core.Models.Sensors;
 using GreenhouseSimulator.Core.Services;
 using System;
+using System.Collections.Generic;
 using System.Linq;
 
 namespace GreenhouseSimulator.Core.Controllers
@@ -14,6 +15,7 @@ namespace GreenhouseSimulator.Core.Controllers
 
         private readonly Greenhouse _greenhouse;
         private readonly IPlanRepository _repository;
+        private readonly HashSet<ActiveSensor> _boundSensors = new();
         private GrowingPlan? _activePlan;
         private bool _isRunning;
         private bool _isPaused;
@@ -238,15 +240,26 @@ namespace GreenhouseSimulator.Core.Controllers
             }
         }
 
+        public void BindNewSensors()
+        {
+            SubscribeToActiveSensors();
+        }
+
         private void SubscribeToActiveSensors()
         {
             foreach (var sensor in _greenhouse.GetAllSensors().OfType<ActiveSensor>())
+                BindSensor(sensor);
+        }
+
+        private void BindSensor(ActiveSensor sensor)
+        {
+            if (!_boundSensors.Add(sensor))
+                return;
+
+            sensor.OnThresholdExceeded += (sender, args) =>
             {
-                sensor.OnThresholdExceeded += (sender, args) =>
-                {
-                    HandleSensorAlert(args.SensorId, args.CurrentValue);
-                };
-            }
+                HandleSensorAlert(args.SensorId, args.CurrentValue);
+            };
         }
 
         private void HandleSensorAlert(string sensorId, double value)

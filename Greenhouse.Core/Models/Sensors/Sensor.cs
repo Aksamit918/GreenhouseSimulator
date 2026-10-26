@@ -8,7 +8,7 @@ namespace GreenhouseSimulator.Core.Models.Sensors
     {
         public string Id { get; }
         public SensorType Type { get; }
-        public Tuple<double, double> Location { get; }
+        public Tuple<double, double> Location { get; private set; }
         public double CurrentValue { get; protected set; }
 
         public Sensor(string id, SensorType type, Tuple<double, double> location)
@@ -17,6 +17,12 @@ namespace GreenhouseSimulator.Core.Models.Sensors
             Type = type;
             Location = location;
             CurrentValue = 0.0;
+        }
+
+        public void MoveTo(Tuple<double, double> location)
+        {
+            ArgumentNullException.ThrowIfNull(location);
+            Location = location;
         }
 
         public abstract void UpdateMeasurement(double value);

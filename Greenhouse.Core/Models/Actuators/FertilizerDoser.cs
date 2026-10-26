@@ -7,7 +7,7 @@ namespace GreenhouseSimulator.Core.Models.Actuators
         private readonly double _pHRate;
 
         public bool IsOn { get; private set; }
-        public Tuple<double, double> Location { get; }
+        public Tuple<double, double> Location { get; private set; }
 
         public double PhDelta => IsOn ? _pHRate : 0.0;
 
@@ -18,6 +18,12 @@ namespace GreenhouseSimulator.Core.Models.Actuators
             Location = location;
             _pHRate = pHRate;
             IsOn = false;
+        }
+
+        public void MoveTo(Tuple<double, double> location)
+        {
+            ArgumentNullException.ThrowIfNull(location);
+            Location = location;
         }
 
         public void TurnOn() => IsOn = true;

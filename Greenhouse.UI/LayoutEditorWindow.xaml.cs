@@ -1,3 +1,8 @@
+using GreenhouseModel = GreenhouseSimulator.Core.Models.Greenhouse;
+using GreenhouseSimulator.Core.Models.Actuators;
+using GreenhouseSimulator.Core.Models.Sensors;
+using System;
+using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -9,12 +14,17 @@ namespace Greenhouse.UI
 {
     public partial class LayoutEditorWindow : Window
     {
+        private readonly GreenhouseModel _greenhouse;
         private FrameworkElement? _draggedElement;
         private Point _clickOffset;
+        private bool _existingPlaced;
 
-        public LayoutEditorWindow()
+        public LayoutEditorWindow(GreenhouseModel greenhouse)
         {
+            _greenhouse = greenhouse ?? throw new ArgumentNullException(nameof(greenhouse));
             InitializeComponent();
+            Loaded += (_, _) => PlaceExistingDevices();
+            EditorCanvas.SizeChanged += (_, _) => PlaceExistingDevices();
         }
 
         private void PaletteItem_MouseDown(object sender, MouseButtonEventArgs e)
@@ -44,12 +54,8 @@ namespace Greenhouse.UI
             if (visualItem == null)
                 return;
 
-            visualItem.MouseLeftButtonDown += PlacedItem_MouseDown;
-            visualItem.Cursor = Cursors.Hand;
-
-            Canvas.SetLeft(visualItem, dropPosition.X - 20);
-            Canvas.SetTop(visualItem, dropPosition.Y - 20);
-            EditorCanvas.Children.Add(visualItem);
+            visualItem.Tag = itemType;
+            PlaceVisual(visualItem, dropPosition.X, dropPosition.Y);
         }
 
         private void PlacedItem_MouseDown(object sender, MouseButtonEventArgs e)
@@ -94,8 +100,155 @@ namespace Greenhouse.UI
 
         private void BtnSaveLayout_Click(object sender, RoutedEventArgs e)
         {
-            MessageBox.Show("Расстановка сохранена!\n\n(Данные готовы для передачи в слой Core)", "Сохранение", MessageBoxButton.OK, MessageBoxImage.Information);
-            Close();
+            if (EditorCanvas.ActualWidth <= 0 || EditorCanvas.ActualHeight <= 0)
+            {
+                MessageBox.Show("План ещё не готов к сохранению.", "Сохранение", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            ApplyLayout();
+            MessageBox.Show("Расстановка применена к текущей теплице.", "Сохранение", MessageBoxButton.OK, MessageBoxImage.Information);
+            DialogResult = true;
+        }
+
+        private void PlaceExistingDevices()
+        {
+            if (_existingPlaced || EditorCanvas.ActualWidth <= 0 || EditorCanvas.ActualHeight <= 0)
+                return;
+
+            _existingPlaced = true;
+
+            foreach (Sensor sensor in _greenhouse.GetAllSensors())
+                PlaceModel(sensor, sensor.Location);
+
+            foreach (IActuator actuator in _greenhouse.GetAllActuators())
+                PlaceModel(actuator, actuator.Location);
+        }
+
+        private void PlaceModel(object device, Tuple<double, double> location)
+        {
+            string? kind = KindOf(device);
+            if (kind == null)
+                return;
+
+            FrameworkElement? visual = CreateVisualItem(kind);
+            if (visual == null)
+                return;
+
+            visual.Tag = device;
+            double x = location.Item1 / _greenhouse.Width * EditorCanvas.ActualWidth;
+            double y = location.Item2 / _greenhouse.Length * EditorCanvas.ActualHeight;
+            PlaceVisual(visual, x, y);
+        }
+
+        private void PlaceVisual(FrameworkElement visual, double centerX, double centerY)
+        {
+            visual.MouseLeftButtonDown += PlacedItem_MouseDown;
+            visual.Cursor = Cursors.Hand;
+            Canvas.SetLeft(visual, centerX - visual.Width / 2);
+            Canvas.SetTop(visual, centerY - visual.Height / 2);
+            EditorCanvas.Children.Add(visual);
+        }
+
+        private void ApplyLayout()
+        {
+            foreach (object child in EditorCanvas.Children)
+            {
+                if (child is not FrameworkElement element || element.Tag == null)
+                    continue;
+
+                Tuple<double, double> location = ToGreenhousePoint(element);
+                switch (element.Tag)
+                {
+                    case Sensor sensor:
+                        sensor.MoveTo(location);
+                        break;
+                    case IActuator actuator:
+                        actuator.MoveTo(location);
+                        break;
+                    case string kind:
+                        AddDevice(kind, location);
+                        break;
+                }
+            }
+        }
+
+        private Tuple<double, double> ToGreenhousePoint(FrameworkElement element)
+        {
+            double left = Canvas.GetLeft(element);
+            double top = Canvas.GetTop(element);
+            if (double.IsNaN(left)) left = 0;
+            if (double.IsNaN(top)) top = 0;
+
+            double centerX = left + element.Width / 2;
+            double centerY = top + element.Height / 2;
+            double x = centerX / EditorCanvas.ActualWidth * _greenhouse.Width;
+            double y = centerY / EditorCanvas.ActualHeight * _greenhouse.Length;
+            return Tuple.Create(
+                Math.Clamp(x, 0, _greenhouse.Width),
+                Math.Clamp(y, 0, _greenhouse.Length));
+        }
+
+        private void AddDevice(string kind, Tuple<double, double> location)
+        {
+            switch (kind)
+            {
+                case "Sensor_Temp":
+                    _greenhouse.AddSensor(new ActiveSensor(NextSensorId("temp"), SensorType.Temperature, location));
+                    break;
+                case "Sensor_Hum":
+                    _greenhouse.AddSensor(new ActiveSensor(NextSensorId("humidity"), SensorType.Humidity, location));
+                    break;
+                case "Sensor_Ph":
+                    _greenhouse.AddSensor(new ActiveSensor(NextSensorId("ph"), SensorType.Ph, location));
+                    break;
+                case "Actuator_Heater":
+                    _greenhouse.AddActuator(new Heater(location));
+                    break;
+                case "Actuator_AC":
+                    _greenhouse.AddActuator(new AirConditioner(location));
+                    break;
+                case "Actuator_Humidifier":
+                    _greenhouse.AddActuator(new Humidifier(location));
+                    break;
+                case "Actuator_Doser":
+                    _greenhouse.AddActuator(new FertilizerDoser(location));
+                    break;
+                case "Actuator_Light":
+                    _greenhouse.AddActuator(new LightingSystem(location));
+                    break;
+            }
+        }
+
+        private string NextSensorId(string prefix)
+        {
+            var ids = _greenhouse.GetAllSensors().Select(sensor => sensor.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            int number = 1;
+            string id;
+            do
+            {
+                id = $"{prefix}-{number}";
+                number++;
+            }
+            while (ids.Contains(id));
+
+            return id;
+        }
+
+        private static string? KindOf(object device)
+        {
+            return device switch
+            {
+                Sensor { Type: SensorType.Temperature } => "Sensor_Temp",
+                Sensor { Type: SensorType.Humidity } => "Sensor_Hum",
+                Sensor { Type: SensorType.Ph } => "Sensor_Ph",
+                Heater => "Actuator_Heater",
+                AirConditioner => "Actuator_AC",
+                Humidifier => "Actuator_Humidifier",
+                FertilizerDoser => "Actuator_Doser",
+                LightingSystem => "Actuator_Light",
+                _ => null
+            };
         }
 
         private FrameworkElement? CreateVisualItem(string type)
@@ -128,7 +281,7 @@ namespace Greenhouse.UI
                     return humidifier;
 
                 case "Actuator_Doser":
-                    return new Path { Data = Geometry.Parse("M 15,0 L 0,15 L 10,15 L 0,35 L 25,10 L 15,10 Z"), Fill = GetGradient(Color.FromRgb(80, 40, 20), Colors.Black), Effect = GetShadow() };
+                    return new Path { Width = 25, Height = 35, Data = Geometry.Parse("M 15,0 L 0,15 L 10,15 L 0,35 L 25,10 L 15,10 Z"), Fill = GetGradient(Color.FromRgb(80, 40, 20), Colors.Black), Effect = GetShadow() };
 
                 case "Actuator_Light":
                     Grid lamp = new Grid { Width = 40, Height = 40, Effect = GetShadow() };

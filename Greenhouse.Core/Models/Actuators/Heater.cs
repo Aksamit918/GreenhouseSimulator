@@ -8,7 +8,7 @@ namespace GreenhouseSimulator.Core.Models.Actuators
         private readonly double _humidityRate;
 
         public bool IsOn { get; private set; }
-        public Tuple<double, double> Location { get; }
+        public Tuple<double, double> Location { get; private set; }
 
         public double TemperatureDelta => IsOn ? _temperatureRate : 0.0;
         public double HumidityDelta => IsOn ? _humidityRate : 0.0;
@@ -21,6 +21,12 @@ namespace GreenhouseSimulator.Core.Models.Actuators
             _temperatureRate = temperatureRate;
             _humidityRate = humidityRate;
             IsOn = false;
+        }
+
+        public void MoveTo(Tuple<double, double> location)
+        {
+            ArgumentNullException.ThrowIfNull(location);
+            Location = location;
         }
 
         public void TurnOn() => IsOn = true;

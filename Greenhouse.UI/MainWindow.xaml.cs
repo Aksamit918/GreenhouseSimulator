@@ -109,9 +109,13 @@ namespace Greenhouse.UI
 
         private void BtnOpenEditor_Click(object sender, RoutedEventArgs e)
         {
-            var editor = new LayoutEditorWindow();
+            var editor = new LayoutEditorWindow(_controller.Greenhouse);
             editor.Owner = this;
-            editor.ShowDialog();
+            if (editor.ShowDialog() == true)
+            {
+                _controller.BindNewSensors();
+                UpdateUI();
+            }
         }
 
         private void BtnShowNewPlan_Click(object sender, RoutedEventArgs e)
