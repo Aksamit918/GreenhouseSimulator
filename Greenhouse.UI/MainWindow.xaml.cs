@@ -97,14 +97,7 @@ namespace Greenhouse.UI
         private void BtnStop_Click(object sender, RoutedEventArgs e)
         {
             _controller.StopCycle();
-            _timer.Stop();
-
-            BtnStart.IsEnabled = true; PlansComboBox.IsEnabled = true;
-            BtnPause.IsEnabled = false; BtnStop.IsEnabled = false;
-
-            TxtStatus.Text = "Статус: Остановлено";
-            TxtHeader.Text = "Ожидание запуска...";
-            UpdateUI();
+            FinishStoppedCycle();
         }
 
         private void BtnOpenEditor_Click(object sender, RoutedEventArgs e)
@@ -242,15 +235,84 @@ namespace Greenhouse.UI
 
         private void Timer_Tick(object sender, EventArgs e)
         {
-            if (!_controller.IsRunning) { BtnStop_Click(null, null); return; }
             if (_controller.IsPaused) return;
 
+            if (!_controller.IsRunning)
+            {
+                FinishStoppedCycle();
+                return;
+            }
+
             _currentAlerts.Clear();
-            _controller.SimulationTick(); 
-            
+            try
+            {
+                _controller.SimulationTick();
+            }
+            catch (Exception)
+            {
+                FinishStoppedCycle();
+                return;
+            }
+
+            if (!_controller.IsRunning)
+            {
+                CheckActuatorChanges();
+                FinishStoppedCycle();
+                return;
+            }
+
             CheckActuatorChanges();
-            
-            UpdateUI(); 
+            UpdateUI();
+        }
+
+        private void FinishStoppedCycle()
+        {
+            _timer.Stop();
+
+            BtnStart.IsEnabled = true; PlansComboBox.IsEnabled = true;
+            BtnPause.IsEnabled = false; BtnStop.IsEnabled = false;
+
+            TxtStatus.Text = "Статус: Остановлено";
+            TxtHeader.Text = "Ожидание запуска...";
+            UpdateUI();
+            ShowCycleResult();
+        }
+
+        private void ShowCycleResult()
+        {
+            SimulationResult result = _controller.TakeResult(out string? failureMessage);
+            if (result == SimulationResult.None)
+                return;
+
+            string crop = _controller.ActivePlan?.CropName ?? "план";
+            int plannedDays = _controller.ActivePlan?.TotalDurationDays ?? 0;
+            int elapsedDays = _controller.ElapsedHours / 24;
+            int elapsedHours = _controller.ElapsedHours % 24;
+
+            switch (result)
+            {
+                case SimulationResult.Completed:
+                    MessageBox.Show(
+                        $"Цикл «{crop}» завершён успешно.\nПлан выполнен полностью: {plannedDays} суток.",
+                        "Цикл завершён",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Information);
+                    break;
+                case SimulationResult.Failed:
+                    MessageBox.Show(
+                        $"Цикл «{crop}» завершился с ошибкой и не был выполнен.\n{failureMessage}",
+                        "Цикл не выполнен",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Error);
+                    break;
+                case SimulationResult.Stopped:
+                    MessageBox.Show(
+                        $"Цикл «{crop}» остановлен и не завершён.\nПрошло {elapsedDays} суток, {elapsedHours} часов из {plannedDays} суток.",
+                        "Цикл не завершён",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Warning);
+                    break;
+            }
         }
 
         private void CheckActuatorChanges()

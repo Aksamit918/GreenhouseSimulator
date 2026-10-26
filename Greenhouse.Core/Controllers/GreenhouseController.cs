@@ -9,6 +9,14 @@ using System.Linq;
 
 namespace GreenhouseSimulator.Core.Controllers
 {
+    public enum SimulationResult
+    {
+        None,
+        Completed,
+        Failed,
+        Stopped
+    }
+
     public class GreenhouseController
     {
         public event Action<string, double>? AlertTriggered;
@@ -28,6 +36,8 @@ namespace GreenhouseSimulator.Core.Controllers
         public int HourOfDay => ElapsedHours % 24;
         public bool IsRunning => _isRunning;
         public bool IsPaused => _isPaused;
+        public SimulationResult LastResult { get; private set; }
+        public string? FailureMessage { get; private set; }
 
         public GreenhouseController(Greenhouse greenhouse, IPlanRepository repository)
         {
@@ -86,6 +96,8 @@ namespace GreenhouseSimulator.Core.Controllers
             ElapsedHours = 0;
             _isRunning = true;
             _isPaused = false;
+            LastResult = SimulationResult.None;
+            FailureMessage = null;
 
             PlanPhase phase = _activePlan.GetPhaseForDay(CurrentDay);
             ApplySensorThresholds(phase);
@@ -94,6 +106,9 @@ namespace GreenhouseSimulator.Core.Controllers
 
         public void StopCycle()
         {
+            if (_isRunning && LastResult == SimulationResult.None)
+                LastResult = SimulationResult.Stopped;
+
             _isRunning = false;
             _isPaused = false;
 
@@ -101,6 +116,15 @@ namespace GreenhouseSimulator.Core.Controllers
             {
                 actuator.TurnOff();
             }
+        }
+
+        public SimulationResult TakeResult(out string? failureMessage)
+        {
+            SimulationResult result = LastResult;
+            failureMessage = FailureMessage;
+            LastResult = SimulationResult.None;
+            FailureMessage = null;
+            return result;
         }
 
         public void Pause()
@@ -137,11 +161,14 @@ namespace GreenhouseSimulator.Core.Controllers
 
                 if (ElapsedHours >= _activePlan.TotalDurationDays * 24)
                 {
+                    LastResult = SimulationResult.Completed;
                     StopCycle();
                 }
             }
-            catch (Exception)
+            catch (Exception ex)
             {
+                LastResult = SimulationResult.Failed;
+                FailureMessage = ex.Message;
                 StopCycle();
                 throw;
             }
