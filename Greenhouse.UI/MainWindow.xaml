@@ -30,6 +30,8 @@
                             <Button x:Name="BtnStop" Content="■ Стоп" Padding="10" Background="#F44336" Foreground="White" Click="BtnStop_Click" IsEnabled="False" Width="70"/>
                         </StackPanel>
 
+                        <Button Content="✏️ Открыть редактор расстановки" Padding="7" Margin="0,0,0,10" Background="#607D8B" Foreground="White" Click="BtnOpenEditor_Click"/>
+
                         <TextBlock x:Name="TxtStatus" Text="Статус: Остановлено" Margin="0,10,0,0" FontStyle="Italic" Foreground="Gray"/>
                     </StackPanel>
                 </GroupBox>

@@ -102,6 +102,13 @@ namespace Greenhouse.UI
             UpdateUI();
         }
 
+        private void BtnOpenEditor_Click(object sender, RoutedEventArgs e)
+        {
+            var editor = new LayoutEditorWindow();
+            editor.Owner = this;
+            editor.ShowDialog();
+        }
+
         private void BtnShowNewPlan_Click(object sender, RoutedEventArgs e)
         {
             OverlayNewPlan.Visibility = Visibility.Visible;
