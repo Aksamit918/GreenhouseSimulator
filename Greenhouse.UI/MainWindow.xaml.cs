@@ -348,14 +348,14 @@ namespace Greenhouse.UI
             else if (actuator is LightingSystem)
             {
                 Grid g = new Grid { Width = 40, Height = 40, Effect = GetShadow(on) };
-                Path rays = new Path { Data = Geometry.Parse("M 20,0 L 25,12 L 38,12 L 28,20 L 32,32 L 20,25 L 8,32 L 12,20 L 2,12 L 15,12 Z"), Fill = Brushes.Gold, Stroke = Brushes.Black, StrokeThickness = 1 };
-                Ellipse core = new Ellipse { Width = 20, Height = 20, Fill = Brushes.Yellow, Stroke = Brushes.Black, StrokeThickness = 1, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+                Path rays = new Path { Data = Geometry.Parse("M 20,6 L 25,16 L 36,16 L 28,23 L 32,34 L 20,28 L 8,34 L 12,23 L 3,16 L 15,16 Z"), Fill = Brushes.Gold, Stroke = Brushes.Black, StrokeThickness = 1 };
+                Ellipse core = new Ellipse { Width = 18, Height = 18, Fill = Brushes.Yellow, Stroke = Brushes.Black, StrokeThickness = 1, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
                 g.Children.Add(rays); g.Children.Add(core); visual = g;
                 Canvas.SetLeft(visual, x - 20); Canvas.SetTop(visual, y - 20);
             }
             else if (actuator is FertilizerDoser)
             {
-                Path lightning = new Path { Data = Geometry.Parse("M 20,0 L 5,20 L 15,20 L 5,40 L 30,15 L 20,15 Z"), Fill = GetGradient(Color.FromRgb(80, 40, 20), Colors.Black), Effect = GetShadow(on) };
+                Path lightning = new Path { Data = Geometry.Parse("M 15,0 L 0,15 L 10,15 L 0,35 L 25,10 L 15,10 Z"), Fill = GetGradient(Color.FromRgb(80, 40, 20), Colors.Black), Effect = GetShadow(on) };
                 visual = lightning;
                 Canvas.SetLeft(visual, x - 15); Canvas.SetTop(visual, y - 20);
             }
