@@ -53,12 +53,24 @@ namespace GreenhouseSimulator.Core.Models
             _sensors.Add(sensor);
         }
 
+        public void RemoveSensor(Sensor sensor)
+        {
+            ArgumentNullException.ThrowIfNull(sensor);
+            _sensors.Remove(sensor);
+        }
+
         public List<Sensor> GetAllSensors() => new List<Sensor>(_sensors);
 
         public void AddActuator(IActuator actuator)
         {
             ArgumentNullException.ThrowIfNull(actuator);
             _actuators.Add(actuator);
+        }
+
+        public void RemoveActuator(IActuator actuator)
+        {
+            ArgumentNullException.ThrowIfNull(actuator);
+            _actuators.Remove(actuator);
         }
 
         public List<IActuator> GetAllActuators() => new List<IActuator>(_actuators);

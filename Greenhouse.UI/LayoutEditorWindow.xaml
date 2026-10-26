@@ -40,7 +40,11 @@
                         </StackPanel>
                     </ScrollViewer>
 
-                    <Button x:Name="BtnSaveLayout" Grid.Row="2" Content="💾 Сохранить расстановку" Padding="10" Background="#4CAF50" Foreground="White" FontWeight="Bold" Click="BtnSaveLayout_Click"/>
+                    <StackPanel Grid.Row="2">
+                        <TextBlock Text="Правый клик или Delete убирает элемент с плана." TextWrapping="Wrap" Foreground="Gray" Margin="0,0,0,8"/>
+                        <Button x:Name="BtnRemoveSelected" Content="Удалить выбранный" Padding="8" Margin="0,0,0,8" IsEnabled="False" Click="BtnRemoveSelected_Click"/>
+                        <Button x:Name="BtnSaveLayout" Content="💾 Сохранить расстановку" Padding="10" Background="#4CAF50" Foreground="White" FontWeight="Bold" Click="BtnSaveLayout_Click"/>
+                    </StackPanel>
                 </Grid>
             </Border>
 
@@ -77,7 +81,7 @@
                         </StackPanel>
                     </Grid>
 
-                    <TextBlock Text="Подсказка: чтобы переместить элемент на плане, просто зажмите его левой кнопкой мыши и тащите." TextWrapping="Wrap" Foreground="Gray" Margin="0,0,0,15"/>
+                    <TextBlock Text="Чтобы переместить элемент, зажмите его левой кнопкой. Правый клик или Delete убирает его с плана." TextWrapping="Wrap" Foreground="Gray" Margin="0,0,0,15"/>
 
                     <Button Content="Понятно" Click="BtnCloseHelp_Click" Padding="20,10" Background="#2196F3" Foreground="White" HorizontalAlignment="Center"/>
                 </StackPanel>

@@ -2,6 +2,7 @@ using GreenhouseModel = GreenhouseSimulator.Core.Models.Greenhouse;
 using GreenhouseSimulator.Core.Models.Actuators;
 using GreenhouseSimulator.Core.Models.Sensors;
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
@@ -16,6 +17,7 @@ namespace Greenhouse.UI
     {
         private readonly GreenhouseModel _greenhouse;
         private FrameworkElement? _draggedElement;
+        private FrameworkElement? _selectedElement;
         private Point _clickOffset;
         private bool _existingPlaced;
 
@@ -25,6 +27,7 @@ namespace Greenhouse.UI
             InitializeComponent();
             Loaded += (_, _) => PlaceExistingDevices();
             EditorCanvas.SizeChanged += (_, _) => PlaceExistingDevices();
+            PreviewKeyDown += LayoutEditorWindow_PreviewKeyDown;
         }
 
         private void PaletteItem_MouseDown(object sender, MouseButtonEventArgs e)
@@ -63,6 +66,7 @@ namespace Greenhouse.UI
             if (sender is not FrameworkElement element)
                 return;
 
+            SelectVisual(element);
             _draggedElement = element;
             _clickOffset = e.GetPosition(element);
             element.CaptureMouse();
@@ -86,6 +90,21 @@ namespace Greenhouse.UI
 
             _draggedElement.ReleaseMouseCapture();
             _draggedElement = null;
+        }
+
+        private void BtnRemoveSelected_Click(object sender, RoutedEventArgs e)
+        {
+            if (_selectedElement != null)
+                RemoveVisual(_selectedElement);
+        }
+
+        private void LayoutEditorWindow_PreviewKeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.Key != Key.Delete || _selectedElement == null)
+                return;
+
+            RemoveVisual(_selectedElement);
+            e.Handled = true;
         }
 
         private void BtnHelp_Click(object sender, RoutedEventArgs e)
@@ -144,14 +163,49 @@ namespace Greenhouse.UI
         private void PlaceVisual(FrameworkElement visual, double centerX, double centerY)
         {
             visual.MouseLeftButtonDown += PlacedItem_MouseDown;
+            visual.MouseRightButtonDown += (_, _) => SelectVisual(visual);
             visual.Cursor = Cursors.Hand;
+
+            var deleteItem = new MenuItem { Header = "Удалить" };
+            deleteItem.Click += (_, _) => RemoveVisual(visual);
+            visual.ContextMenu = new ContextMenu { Items = { deleteItem } };
+
             Canvas.SetLeft(visual, centerX - visual.Width / 2);
             Canvas.SetTop(visual, centerY - visual.Height / 2);
             EditorCanvas.Children.Add(visual);
         }
 
+        private void SelectVisual(FrameworkElement visual)
+        {
+            if (_selectedElement != null)
+                _selectedElement.Opacity = 1;
+
+            _selectedElement = visual;
+            visual.Opacity = 0.55;
+            BtnRemoveSelected.IsEnabled = true;
+        }
+
+        private void RemoveVisual(FrameworkElement visual)
+        {
+            if (_draggedElement == visual)
+            {
+                visual.ReleaseMouseCapture();
+                _draggedElement = null;
+            }
+
+            EditorCanvas.Children.Remove(visual);
+            if (_selectedElement != visual)
+                return;
+
+            _selectedElement = null;
+            BtnRemoveSelected.IsEnabled = false;
+        }
+
         private void ApplyLayout()
         {
+            var keptSensors = new HashSet<Sensor>();
+            var keptActuators = new HashSet<IActuator>();
+
             foreach (object child in EditorCanvas.Children)
             {
                 if (child is not FrameworkElement element || element.Tag == null)
@@ -162,14 +216,28 @@ namespace Greenhouse.UI
                 {
                     case Sensor sensor:
                         sensor.MoveTo(location);
+                        keptSensors.Add(sensor);
                         break;
                     case IActuator actuator:
                         actuator.MoveTo(location);
+                        keptActuators.Add(actuator);
                         break;
                     case string kind:
                         AddDevice(kind, location);
                         break;
                 }
+            }
+
+            foreach (Sensor sensor in _greenhouse.GetAllSensors())
+            {
+                if (!keptSensors.Contains(sensor))
+                    _greenhouse.RemoveSensor(sensor);
+            }
+
+            foreach (IActuator actuator in _greenhouse.GetAllActuators())
+            {
+                if (!keptActuators.Contains(actuator))
+                    _greenhouse.RemoveActuator(actuator);
             }
         }
 
