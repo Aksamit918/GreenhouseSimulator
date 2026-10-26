@@ -1,5 +1,6 @@
 ﻿using GreenhouseSimulator.Core.Controllers;
 using GreenhouseSimulator.Core.Models.Actuators;
+using GreenhouseSimulator.Core.Models.Plans;
 using GreenhouseSimulator.Core.Models.Sensors;
 using GreenhouseSimulator.Core.Services;
 using System;
@@ -57,7 +58,10 @@ namespace Greenhouse.UI
                 _controller.StartCycle(PlansComboBox.SelectedItem.ToString());
                 _timer.Start();
 
-                BtnStart.IsEnabled = false; PlansComboBox.IsEnabled = false; BtnStop.IsEnabled = true;
+                BtnStart.IsEnabled = false; PlansComboBox.IsEnabled = false;
+                BtnPause.IsEnabled = true; BtnStop.IsEnabled = true;
+                BtnPause.Content = "⏸ Пауза";
+
                 TxtStatus.Text = "Статус: Выращиваем...";
                 
                 _currentAlerts.Clear();
@@ -69,19 +73,80 @@ namespace Greenhouse.UI
             catch (Exception ex) { MessageBox.Show(ex.Message); }
         }
 
+        private void BtnPause_Click(object sender, RoutedEventArgs e)
+        {
+            if (_controller.IsPaused)
+            {
+                _controller.Resume();
+                BtnPause.Content = "⏸ Пауза";
+                TxtStatus.Text = "Статус: Выращиваем...";
+            }
+            else
+            {
+                _controller.Pause();
+                BtnPause.Content = "▶ Продолжить";
+                TxtStatus.Text = "Статус: На паузе";
+            }
+        }
+
         private void BtnStop_Click(object sender, RoutedEventArgs e)
         {
             _controller.StopCycle();
             _timer.Stop();
-            BtnStart.IsEnabled = true; PlansComboBox.IsEnabled = true; BtnStop.IsEnabled = false;
+
+            BtnStart.IsEnabled = true; PlansComboBox.IsEnabled = true;
+            BtnPause.IsEnabled = false; BtnStop.IsEnabled = false;
+
             TxtStatus.Text = "Статус: Остановлено";
             TxtHeader.Text = "Ожидание запуска...";
             UpdateUI();
         }
 
+        private void BtnShowNewPlan_Click(object sender, RoutedEventArgs e)
+        {
+            OverlayNewPlan.Visibility = Visibility.Visible;
+        }
+
+        private void BtnCancelPlan_Click(object sender, RoutedEventArgs e)
+        {
+            OverlayNewPlan.Visibility = Visibility.Collapsed;
+        }
+
+        private void BtnSavePlan_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                string name = InputCropName.Text;
+                double temp = double.Parse(InputTemp.Text.Replace(".", ","));
+                double hum = double.Parse(InputHum.Text.Replace(".", ","));
+                double ph = double.Parse(InputPh.Text.Replace(".", ","));
+
+                var tempC = new ParameterCorridor(temp - 2, temp + 2, temp);
+                var humC = new ParameterCorridor(hum - 5, hum + 5, hum);
+                var phC = new ParameterCorridor(ph - 0.5, ph + 0.5, ph);
+
+                var plan = new GrowingPlan(name);
+                plan.AddPhase(new PlanPhase(1, tempC, phC, humC, 14));
+
+                _controller.AddPlan(plan);
+
+                PlansComboBox.ItemsSource = _controller.ListPlans();
+                PlansComboBox.SelectedItem = name;
+
+                OverlayNewPlan.Visibility = Visibility.Collapsed;
+                InputCropName.Clear();
+                MessageBox.Show($"План '{name}' успешно создан и сохранен!", "Успех", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Ошибка при создании плана:\n{ex.Message}", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
         private void Timer_Tick(object sender, EventArgs e)
         {
             if (!_controller.IsRunning) { BtnStop_Click(null, null); return; }
+            if (_controller.IsPaused) return;
 
             _currentAlerts.Clear();
             _controller.SimulationTick(); 

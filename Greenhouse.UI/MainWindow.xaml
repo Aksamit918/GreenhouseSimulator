@@ -4,49 +4,86 @@
         Title="Симулятор Теплицы 3000" Height="700" Width="1050"
         WindowStartupLocation="CenterScreen" Background="#F0F4F8">
     
-    <Grid Margin="15">
-        <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="280"/>
-            <ColumnDefinition Width="*"/>
-        </Grid.ColumnDefinitions>
+    <Grid>
+        <Grid Margin="15">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="280"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
 
-        <StackPanel Grid.Column="0" Margin="0,0,15,0">
-            <GroupBox Header="Управление симуляцией" Padding="10" FontWeight="Bold">
-                <StackPanel TextElement.FontWeight="Normal">
-                    <TextBlock Text="Выберите план посадки:" Margin="0,0,0,5"/>
-                    <ComboBox x:Name="PlansComboBox" Margin="0,0,0,15" Padding="5"/>
-                    
-                    <Button x:Name="BtnStart" Content="▶ Запустить цикл" Padding="10" Background="#4CAF50" Foreground="White" Click="BtnStart_Click" Margin="0,0,0,10"/>
-                    <Button x:Name="BtnStop" Content="■ Остановить" Padding="10" Background="#F44336" Foreground="White" Click="BtnStop_Click" IsEnabled="False"/>
-                    
-                    <TextBlock x:Name="TxtStatus" Text="Статус: Остановлено" Margin="0,20,0,0" FontStyle="Italic" Foreground="Gray"/>
+            <StackPanel Grid.Column="0" Margin="0,0,15,0">
+                <GroupBox Header="Управление симуляцией" Padding="10" FontWeight="Bold">
+                    <StackPanel TextElement.FontWeight="Normal">
+                        <TextBlock Text="Выберите план посадки:" Margin="0,0,0,5"/>
+                        <Grid Margin="0,0,0,15">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <ComboBox x:Name="PlansComboBox" Padding="5" Grid.Column="0" Margin="0,0,5,0"/>
+                            <Button Content="➕" Grid.Column="1" Width="30" Click="BtnShowNewPlan_Click" ToolTip="Создать новый план" Background="#2196F3" Foreground="White"/>
+                        </Grid>
+
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                            <Button x:Name="BtnStart" Content="▶ Старт" Padding="10" Background="#4CAF50" Foreground="White" Click="BtnStart_Click" Width="75" Margin="0,0,5,0"/>
+                            <Button x:Name="BtnPause" Content="⏸ Пауза" Padding="10" Background="#FF9800" Foreground="White" Click="BtnPause_Click" IsEnabled="False" Width="85" Margin="0,0,5,0"/>
+                            <Button x:Name="BtnStop" Content="■ Стоп" Padding="10" Background="#F44336" Foreground="White" Click="BtnStop_Click" IsEnabled="False" Width="70"/>
+                        </StackPanel>
+
+                        <TextBlock x:Name="TxtStatus" Text="Статус: Остановлено" Margin="0,10,0,0" FontStyle="Italic" Foreground="Gray"/>
+                    </StackPanel>
+                </GroupBox>
+
+                <GroupBox Header="Текущие предупреждения" Margin="0,15,0,0" Padding="10" FontWeight="Bold">
+                    <TextBlock x:Name="TxtAlerts" Text="Всё в норме" Foreground="DarkGreen" TextWrapping="Wrap" TextElement.FontWeight="Normal"/>
+                </GroupBox>
+
+                <GroupBox Header="Журнал действий автоматики" Margin="0,15,0,0" Padding="10" FontWeight="Bold" Height="220">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <TextBlock x:Name="TxtHistory" TextElement.FontWeight="Normal" TextWrapping="Wrap" FontSize="11" Foreground="#333"/>
+                    </ScrollViewer>
+                </GroupBox>
+            </StackPanel>
+
+            <GroupBox Grid.Column="1" Header="План теплицы (Вид сверху)" Padding="10" FontWeight="Bold">
+                <Grid TextElement.FontWeight="Normal">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+
+                    <TextBlock x:Name="TxtHeader" Text="Ожидание запуска..." FontSize="16" HorizontalAlignment="Center" Margin="0,0,0,10"/>
+
+                    <Border Grid.Row="1" BorderBrush="#333" BorderThickness="3" Background="White" Margin="10">
+                        <Canvas x:Name="GreenhouseCanvas" ClipToBounds="True" SizeChanged="GreenhouseCanvas_SizeChanged"/>
+                    </Border>
+                </Grid>
+            </GroupBox>
+        </Grid>
+
+        <Grid x:Name="OverlayNewPlan" Background="#80000000" Visibility="Collapsed" Panel.ZIndex="100">
+            <Border Background="White" Width="300" CornerRadius="10" Padding="20" VerticalAlignment="Center" HorizontalAlignment="Center">
+                <StackPanel>
+                    <TextBlock Text="Новый план (Базовый)" FontWeight="Bold" FontSize="16" Margin="0,0,0,15" HorizontalAlignment="Center"/>
+
+                    <TextBlock Text="Название культуры:" />
+                    <TextBox x:Name="InputCropName" Margin="0,0,0,10" Padding="4" />
+
+                    <TextBlock Text="Идеальная Температура (°C):" />
+                    <TextBox x:Name="InputTemp" Text="25" Margin="0,0,0,10" Padding="4" />
+
+                    <TextBlock Text="Идеальная Влажность (%):" />
+                    <TextBox x:Name="InputHum" Text="65" Margin="0,0,0,10" Padding="4" />
+
+                    <TextBlock Text="Идеальный уровень pH:" />
+                    <TextBox x:Name="InputPh" Text="6.0" Margin="0,0,0,20" Padding="4" />
+
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                        <Button Content="Отмена" Click="BtnCancelPlan_Click" Padding="15,7" Margin="0,0,10,0"/>
+                        <Button Content="Сохранить" Click="BtnSavePlan_Click" Padding="15,7" Background="#4CAF50" Foreground="White"/>
+                    </StackPanel>
                 </StackPanel>
-            </GroupBox>
-
-            <GroupBox Header="Текущие предупреждения" Margin="0,15,0,0" Padding="10" FontWeight="Bold">
-                <TextBlock x:Name="TxtAlerts" Text="Всё в норме" Foreground="DarkGreen" TextWrapping="Wrap" TextElement.FontWeight="Normal"/>
-            </GroupBox>
-
-            <GroupBox Header="Журнал действий автоматики" Margin="0,15,0,0" Padding="10" FontWeight="Bold" Height="220">
-                <ScrollViewer VerticalScrollBarVisibility="Auto">
-                    <TextBlock x:Name="TxtHistory" TextElement.FontWeight="Normal" TextWrapping="Wrap" FontSize="11" Foreground="#333"/>
-                </ScrollViewer>
-            </GroupBox>
-        </StackPanel>
-
-        <GroupBox Grid.Column="1" Header="План теплицы (Вид сверху)" Padding="10" FontWeight="Bold">
-            <Grid TextElement.FontWeight="Normal">
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="*"/>
-                </Grid.RowDefinitions>
-                
-                <TextBlock x:Name="TxtHeader" Text="Ожидание запуска..." FontSize="16" HorizontalAlignment="Center" Margin="0,0,0,10"/>
-                
-                <Border Grid.Row="1" BorderBrush="#333" BorderThickness="3" Background="White" Margin="10">
-                    <Canvas x:Name="GreenhouseCanvas" ClipToBounds="True" SizeChanged="GreenhouseCanvas_SizeChanged"/>
-                </Border>
-            </Grid>
-        </GroupBox>
+            </Border>
+        </Grid>
     </Grid>
 </Window>
