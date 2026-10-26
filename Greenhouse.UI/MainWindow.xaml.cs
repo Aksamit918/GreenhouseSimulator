@@ -171,19 +171,19 @@ namespace Greenhouse.UI
                     string logLine = "";
                     if (act.IsOn)
                     {
-                        if (act is Heater) 
-                            logLine = $"Для повышения температуры – выключить кондиционеры и включить обогреватели. (Зафиксировано: {gh.CurrentTemperature:F1}°C)";
-                        else if (act is AirConditioner) 
-                            logLine = $"Для понижения температуры – включить кондиционеры и выключить обогреватели. (Зафиксировано: {gh.CurrentTemperature:F1}°C)";
-                        else if (act is Humidifier) 
-                            logLine = $"Для повышения влажности – выключить обогреватели и включить увлажнители. (Зафиксировано: {gh.CurrentHumidity:F1}%)";
-                        else if (act is FertilizerDoser) 
-                            logLine = $"Для повышения pH – активировать дозаторы удобрений. (Зафиксировано: pH {gh.CurrentPh:F2})";
+                        if (act is Heater)
+                            logLine = $"Для повышения температуры – включены обогреватели. (Факт: {gh.CurrentTemperature:F1}°C)";
+                        else if (act is AirConditioner)
+                            logLine = $"Для понижения температуры – включены кондиционеры. (Факт: {gh.CurrentTemperature:F1}°C)";
+                        else if (act is Humidifier)
+                            logLine = $"Для повышения влажности – включены увлажнители. (Факт: {gh.CurrentHumidity:F1}%)";
+                        else if (act is FertilizerDoser)
+                            logLine = $"Для регулировки pH – активированы дозаторы. (Факт: pH {gh.CurrentPh:F2})";
                     }
                     else
                     {
-                        if (act is FertilizerDoser) 
-                            logLine = $"При достижении заданного значения - выключить. (Текущий pH: {gh.CurrentPh:F2})";
+                        if (act is FertilizerDoser)
+                            logLine = $"pH нормализовался ({gh.CurrentPh:F2}) - дозатор выключен.";
                         else if (act is Heater) 
                             logLine = $"Температура стабилизировалась ({gh.CurrentTemperature:F1}°C) - обогреватель выключен.";
                         else if (act is AirConditioner) 
