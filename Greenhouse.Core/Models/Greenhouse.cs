@@ -15,7 +15,6 @@ namespace GreenhouseSimulator.Core.Models
         private const double TemperatureNoiseAmplitude = 0.6;
         private const double HumidityNoiseAmplitude = 2.5;
         private const double PhNoiseAmplitude = 0.08;
-        private const double PhAcidificationPerTick = 0.12;
         private const double CorridorPaddingFraction = 0.1;
 
         private const double MinHumidity = 0.0;
@@ -68,17 +67,25 @@ namespace GreenhouseSimulator.Core.Models
         {
             ArgumentNullException.ThrowIfNull(phase);
 
-            ApplyNoise();
+            ApplyNoise(phase, hourOfDay);
             ApplyActuatorEffects();
-            ClampEnvironment(phase, hourOfDay);
+            ClampToPhysicalLimits();
             UpdateSensors();
         }
 
-        private void ApplyNoise()
+        private void ApplyNoise(PlanPhase phase, int hourOfDay)
         {
-            CurrentTemperature += RandomNoise(TemperatureNoiseAmplitude);
-            CurrentHumidity += RandomNoise(HumidityNoiseAmplitude);
-            CurrentPh += RandomNoise(PhNoiseAmplitude) - PhAcidificationPerTick;
+            CurrentTemperature = WalkWithin(CurrentTemperature, phase.GetTempCorridor(hourOfDay), TemperatureNoiseAmplitude);
+            CurrentHumidity = WalkWithin(CurrentHumidity, phase.HumidityCorridor, HumidityNoiseAmplitude);
+            CurrentPh = WalkWithin(CurrentPh, phase.PhCorridor, PhNoiseAmplitude);
+        }
+
+        private static double WalkWithin(double value, ParameterCorridor corridor, double amplitude)
+        {
+            double width = corridor.MaxValue - corridor.MinValue;
+            double padding = CorridorPaddingFraction * width;
+            double next = value + RandomNoise(amplitude);
+            return Math.Clamp(next, corridor.MinValue - padding, corridor.MaxValue + padding);
         }
 
         private static double RandomNoise(double amplitude)
@@ -112,21 +119,10 @@ namespace GreenhouseSimulator.Core.Models
             }
         }
 
-        private void ClampEnvironment(PlanPhase phase, int hourOfDay)
+        private void ClampToPhysicalLimits()
         {
-            CurrentTemperature = ClampToWideCorridor(CurrentTemperature, phase.GetTempCorridor(hourOfDay));
-            CurrentHumidity = ClampToWideCorridor(CurrentHumidity, phase.HumidityCorridor);
-            CurrentPh = ClampToWideCorridor(CurrentPh, phase.PhCorridor);
-
             CurrentHumidity = Math.Clamp(CurrentHumidity, MinHumidity, MaxHumidity);
             CurrentPh = Math.Clamp(CurrentPh, MinPh, MaxPh);
-        }
-
-        private static double ClampToWideCorridor(double value, ParameterCorridor corridor)
-        {
-            double width = corridor.MaxValue - corridor.MinValue;
-            double padding = CorridorPaddingFraction * width;
-            return Math.Clamp(value, corridor.MinValue - padding, corridor.MaxValue + padding);
         }
 
         private void UpdateSensors()
