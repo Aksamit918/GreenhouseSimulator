@@ -27,6 +27,7 @@ namespace GreenhouseSimulator.Core.Controllers
         private GrowingPlan? _activePlan;
         private bool _isRunning;
         private bool _isPaused;
+        private bool _doserLatched;
 
         public Greenhouse Greenhouse => _greenhouse;
         public GrowingPlan? ActivePlan => _activePlan;
@@ -96,6 +97,7 @@ namespace GreenhouseSimulator.Core.Controllers
             ElapsedHours = 0;
             _isRunning = true;
             _isPaused = false;
+            _doserLatched = false;
             LastResult = SimulationResult.None;
             FailureMessage = null;
 
@@ -111,6 +113,7 @@ namespace GreenhouseSimulator.Core.Controllers
 
             _isRunning = false;
             _isPaused = false;
+            _doserLatched = false;
 
             foreach (var actuator in _greenhouse.GetAllActuators())
             {
@@ -196,6 +199,11 @@ namespace GreenhouseSimulator.Core.Controllers
             bool phAtTarget = _greenhouse.CurrentPh >= phase.PhCorridor.TargetValue;
             bool lightsOn = HourOfDay < phase.LightDurationHours;
 
+            if (phLow)
+                _doserLatched = true;
+            else if (phHigh || phAtTarget)
+                _doserLatched = false;
+
             bool heaterOn = tooCold;
             bool acOn = tooHot;
             bool humidifierOn = tooDry;
@@ -231,14 +239,7 @@ namespace GreenhouseSimulator.Core.Controllers
                         break;
 
                     case FertilizerDoser doser:
-                        if (phLow)
-                        {
-                            doser.TurnOn();
-                        }
-                        else if (phHigh || phAtTarget)
-                        {
-                            doser.TurnOff();
-                        }
+                        SetPower(doser, _doserLatched);
                         break;
                 }
             }
@@ -280,6 +281,16 @@ namespace GreenhouseSimulator.Core.Controllers
         public void BindNewSensors()
         {
             SubscribeToActiveSensors();
+        }
+
+        public void SyncRegulation()
+        {
+            if (!_isRunning || _activePlan == null)
+                return;
+
+            PlanPhase phase = _activePlan.GetPhaseForDay(CurrentDay);
+            ApplySensorThresholds(phase);
+            RegulateEnvironment(phase);
         }
 
         private void SubscribeToActiveSensors()

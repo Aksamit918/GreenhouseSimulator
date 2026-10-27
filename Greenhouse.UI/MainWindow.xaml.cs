@@ -19,7 +19,7 @@ namespace Greenhouse.UI
         private GreenhouseController _controller;
         private DispatcherTimer _timer;
         private List<string> _currentAlerts = new List<string>();
-        private Dictionary<string, bool> _actuatorStates = new Dictionary<string, bool>();
+        private Dictionary<IActuator, bool> _actuatorStates = new Dictionary<IActuator, bool>();
         private bool _editingExistingPlan;
         private double _tempSpread = 2;
         private double _nightTempSpread = 2;
@@ -72,7 +72,8 @@ namespace Greenhouse.UI
                 _currentAlerts.Clear();
                 TxtHistory.Text = "--- Цикл запущен ---\n";
                 _actuatorStates.Clear();
-                
+                CheckActuatorChanges();
+
                 UpdateUI();
             }
             catch (Exception ex) { MessageBox.Show(ex.Message); }
@@ -107,6 +108,9 @@ namespace Greenhouse.UI
             if (editor.ShowDialog() == true)
             {
                 _controller.BindNewSensors();
+                _controller.SyncRegulation();
+                if (_controller.IsRunning)
+                    CheckActuatorChanges(schemeEdited: true);
                 UpdateUI();
             }
         }
@@ -315,50 +319,124 @@ namespace Greenhouse.UI
             }
         }
 
-        private void CheckActuatorChanges()
+        private void CheckActuatorChanges(bool schemeEdited = false)
         {
             string timeStamp = $"[День {_controller.CurrentDay}, {_controller.HourOfDay}:00]";
             var gh = _controller.Greenhouse;
+            List<IActuator> actuators = gh.GetAllActuators();
+            string temperature = $"{gh.CurrentTemperature:F1}°C";
+            string humidity = $"{gh.CurrentHumidity:F1}%";
+            string ph = $"pH {gh.CurrentPh:F2}";
 
-            foreach (var act in gh.GetAllActuators())
+            LogRegulatorGroup(
+                timeStamp,
+                actuators,
+                actuator => actuator is Heater,
+                count => $"Для повышения температуры – включены обогреватели ({count} шт.). (Факт: {temperature})",
+                $"Температура стабилизировалась ({temperature}) - обогреватель выключен.",
+                previous => $"Со схемы убраны обогреватели ({previous} шт.) — нагрев прекращён. (Факт: {temperature})",
+                (previous, current) => $"Работающих обогревателей: {current} шт. (было {previous}). (Факт: {temperature})",
+                (previous, current) => current == 0
+                    ? $"Со схемы убраны обогреватели ({previous} шт.)."
+                    : $"Обогревателей на схеме: {current} шт. (было {previous}), сейчас выключены.",
+                schemeEdited);
+
+            LogRegulatorGroup(
+                timeStamp,
+                actuators,
+                actuator => actuator is AirConditioner,
+                count => $"Для понижения температуры – включены кондиционеры ({count} шт.). (Факт: {temperature})",
+                $"Температура стабилизировалась ({temperature}) - кондиционер выключен.",
+                previous => $"Со схемы убраны кондиционеры ({previous} шт.) — охлаждение прекращено. (Факт: {temperature})",
+                (previous, current) => $"Работающих кондиционеров: {current} шт. (было {previous}). (Факт: {temperature})",
+                (previous, current) => current == 0
+                    ? $"Со схемы убраны кондиционеры ({previous} шт.)."
+                    : $"Кондиционеров на схеме: {current} шт. (было {previous}), сейчас выключены.",
+                schemeEdited);
+
+            LogRegulatorGroup(
+                timeStamp,
+                actuators,
+                actuator => actuator is Humidifier,
+                count => $"Для повышения влажности – включены увлажнители ({count} шт.). (Факт: {humidity})",
+                $"Влажность стабилизировалась ({humidity}) - увлажнитель выключен.",
+                previous => $"Со схемы убраны увлажнители ({previous} шт.) — увлажнение прекращено. (Факт: {humidity})",
+                (previous, current) => $"Работающих увлажнителей: {current} шт. (было {previous}). (Факт: {humidity})",
+                (previous, current) => current == 0
+                    ? $"Со схемы убраны увлажнители ({previous} шт.)."
+                    : $"Увлажнителей на схеме: {current} шт. (было {previous}), сейчас выключены.",
+                schemeEdited);
+
+            LogRegulatorGroup(
+                timeStamp,
+                actuators,
+                actuator => actuator is FertilizerDoser,
+                count => $"Для регулировки pH – активированы дозаторы ({count} шт.). (Факт: {ph})",
+                $"pH нормализовался ({gh.CurrentPh:F2}) - дозатор выключен.",
+                previous => $"Со схемы убраны дозаторы ({previous} шт.) — корректировка pH прекращена. (Факт: {ph})",
+                (previous, current) => $"Работающих дозаторов: {current} шт. (было {previous}). (Факт: {ph})",
+                (previous, current) => current == 0
+                    ? $"Со схемы убраны дозаторы ({previous} шт.)."
+                    : $"Дозаторов на схеме: {current} шт. (было {previous}), сейчас выключены.",
+                schemeEdited);
+
+            _actuatorStates.Clear();
+            foreach (IActuator actuator in actuators)
+                _actuatorStates[actuator] = actuator.IsOn;
+        }
+
+        private void LogRegulatorGroup(
+            string timeStamp,
+            IReadOnlyList<IActuator> actuators,
+            Func<IActuator, bool> match,
+            Func<int, string> turnedOn,
+            string turnedOff,
+            Func<int, string> removedWhileWorking,
+            Func<int, int, string> resized,
+            Func<int, int, string> idleCountChanged,
+            bool schemeEdited)
+        {
+            int previousTotal = 0;
+            int previousOn = 0;
+            foreach (KeyValuePair<IActuator, bool> pair in _actuatorStates)
             {
-                string actName = act.GetType().Name;
-                bool wasOn = _actuatorStates.ContainsKey(actName) && _actuatorStates[actName];
+                if (!match(pair.Key))
+                    continue;
 
-                if (wasOn != act.IsOn)
-                {
-                    string logLine = "";
-                    if (act.IsOn)
-                    {
-                        if (act is Heater)
-                            logLine = $"Для повышения температуры – включены обогреватели. (Факт: {gh.CurrentTemperature:F1}°C)";
-                        else if (act is AirConditioner)
-                            logLine = $"Для понижения температуры – включены кондиционеры. (Факт: {gh.CurrentTemperature:F1}°C)";
-                        else if (act is Humidifier)
-                            logLine = $"Для повышения влажности – включены увлажнители. (Факт: {gh.CurrentHumidity:F1}%)";
-                        else if (act is FertilizerDoser)
-                            logLine = $"Для регулировки pH – активированы дозаторы. (Факт: pH {gh.CurrentPh:F2})";
-                    }
-                    else
-                    {
-                        if (act is FertilizerDoser)
-                            logLine = $"pH нормализовался ({gh.CurrentPh:F2}) - дозатор выключен.";
-                        else if (act is Heater) 
-                            logLine = $"Температура стабилизировалась ({gh.CurrentTemperature:F1}°C) - обогреватель выключен.";
-                        else if (act is AirConditioner) 
-                            logLine = $"Температура стабилизировалась ({gh.CurrentTemperature:F1}°C) - кондиционер выключен.";
-                        else if (act is Humidifier) 
-                            logLine = $"Влажность стабилизировалась ({gh.CurrentHumidity:F1}%) - увлажнитель выключен.";
-                    }
-
-                    if (!string.IsNullOrEmpty(logLine))
-                    {
-                        TxtHistory.Text = $"{timeStamp} {logLine}\n\n" + TxtHistory.Text;
-                    }
-                    
-                    _actuatorStates[actName] = act.IsOn;
-                }
+                previousTotal++;
+                if (pair.Value)
+                    previousOn++;
             }
+
+            int currentTotal = 0;
+            int currentOn = 0;
+            foreach (IActuator actuator in actuators)
+            {
+                if (!match(actuator))
+                    continue;
+
+                currentTotal++;
+                if (actuator.IsOn)
+                    currentOn++;
+            }
+
+            if (previousTotal == currentTotal && previousOn == currentOn)
+                return;
+
+            string? line = null;
+            if (currentOn > 0 && previousOn == 0)
+                line = turnedOn(currentOn);
+            else if (currentOn == 0 && previousOn > 0 && currentTotal == 0)
+                line = removedWhileWorking(previousTotal);
+            else if (currentOn == 0 && previousOn > 0)
+                line = turnedOff;
+            else if (currentOn > 0 && previousOn > 0 && currentOn != previousOn)
+                line = resized(previousOn, currentOn);
+            else if (previousTotal != currentTotal && (previousTotal > 0 || schemeEdited))
+                line = idleCountChanged(previousTotal, currentTotal);
+
+            if (!string.IsNullOrEmpty(line))
+                TxtHistory.Text = $"{timeStamp} {line}\n\n" + TxtHistory.Text;
         }
 
         private void OnAlertTriggered(string sensorId, double badValue)
