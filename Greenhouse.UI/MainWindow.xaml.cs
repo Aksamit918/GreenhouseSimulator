@@ -489,12 +489,14 @@ namespace Greenhouse.UI
             }
             else if (actuator is AirConditioner)
             {
-                Border outer = new Border { Width = 40, Height = 140, Background = Brushes.White, BorderBrush = new SolidColorBrush(Color.FromRgb(100, 180, 200)), BorderThickness = new Thickness(4), CornerRadius = new CornerRadius(3), Effect = GetShadow(on) };
+                Border outer = new Border { Width = 120, Height = 35, Background = Brushes.White, BorderBrush = new SolidColorBrush(Color.FromRgb(100, 180, 200)), BorderThickness = new Thickness(4), CornerRadius = new CornerRadius(3), Effect = GetShadow(on) };
                 Border inner = new Border { Margin = new Thickness(2), BorderBrush = new SolidColorBrush(Color.FromRgb(100, 180, 200)), BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(2) };
                 TextBlock tb = new TextBlock { Text = "кондиционер", FontSize = 12, Foreground = Brushes.Black, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-                tb.LayoutTransform = new RotateTransform(-90);
-                inner.Child = tb; outer.Child = inner; visual = outer;
-                Canvas.SetLeft(visual, x - 20); Canvas.SetTop(visual, y - 70);
+                inner.Child = tb;
+                outer.Child = inner;
+                visual = outer;
+                Canvas.SetLeft(visual, x - 60);
+                Canvas.SetTop(visual, y - 17);
             }
             else if (actuator is Humidifier)
             {

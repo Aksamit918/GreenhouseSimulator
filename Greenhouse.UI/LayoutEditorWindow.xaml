@@ -74,7 +74,7 @@
                         <StackPanel Grid.Column="1">
                             <TextBlock Text="Устройства (Фигуры):" FontWeight="Bold" Margin="0,0,0,5"/>
                             <TextBlock Text="Зел. прямоугольник - Обогреватель"/>
-                            <TextBlock Text="Белый верт. прямоуг. - Кондиционер"/>
+                            <TextBlock Text="Белый прямоугольник - Кондиционер"/>
                             <TextBlock Text="Фиолетовая трапеция - Увлажнитель"/>
                             <TextBlock Text="Молния - Дозатор pH"/>
                             <TextBlock Text="Солнце - Источник света"/>
