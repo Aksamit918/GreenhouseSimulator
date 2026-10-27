@@ -32,8 +32,11 @@ namespace Greenhouse.UI
 
         private void PaletteItem_MouseDown(object sender, MouseButtonEventArgs e)
         {
-            if (sender is Button btn && btn.Tag != null)
-                DragDrop.DoDragDrop(btn, btn.Tag.ToString(), DragDropEffects.Copy);
+            if (sender is not Button btn || btn.Tag == null)
+                return;
+
+            var data = new DataObject(DataFormats.StringFormat, btn.Tag.ToString());
+            DragDrop.DoDragDrop(btn, data, DragDropEffects.Copy);
         }
 
         private void EditorCanvas_DragOver(object sender, DragEventArgs e)
@@ -41,6 +44,7 @@ namespace Greenhouse.UI
             e.Effects = e.Data.GetDataPresent(DataFormats.StringFormat)
                 ? DragDropEffects.Copy
                 : DragDropEffects.None;
+            e.Handled = true;
         }
 
         private void EditorCanvas_Drop(object sender, DragEventArgs e)
@@ -49,7 +53,7 @@ namespace Greenhouse.UI
                 return;
 
             string? itemType = e.Data.GetData(DataFormats.StringFormat) as string;
-            if (itemType == null)
+            if (string.IsNullOrWhiteSpace(itemType))
                 return;
 
             Point dropPosition = e.GetPosition(EditorCanvas);
@@ -59,6 +63,7 @@ namespace Greenhouse.UI
 
             visualItem.Tag = itemType;
             PlaceVisual(visualItem, dropPosition.X, dropPosition.Y);
+            e.Handled = true;
         }
 
         private void PlacedItem_MouseDown(object sender, MouseButtonEventArgs e)
