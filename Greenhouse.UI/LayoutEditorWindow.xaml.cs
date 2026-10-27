@@ -27,7 +27,6 @@ namespace Greenhouse.UI
             InitializeComponent();
             Loaded += (_, _) => PlaceExistingDevices();
             EditorCanvas.SizeChanged += (_, _) => PlaceExistingDevices();
-            PreviewKeyDown += LayoutEditorWindow_PreviewKeyDown;
         }
 
         private void PaletteItem_MouseDown(object sender, MouseButtonEventArgs e)
@@ -103,15 +102,6 @@ namespace Greenhouse.UI
                 RemoveVisual(_selectedElement);
         }
 
-        private void LayoutEditorWindow_PreviewKeyDown(object sender, KeyEventArgs e)
-        {
-            if (e.Key != Key.Delete || _selectedElement == null)
-                return;
-
-            RemoveVisual(_selectedElement);
-            e.Handled = true;
-        }
-
         private void BtnHelp_Click(object sender, RoutedEventArgs e)
         {
             OverlayHelp.Visibility = Visibility.Visible;
@@ -168,12 +158,7 @@ namespace Greenhouse.UI
         private void PlaceVisual(FrameworkElement visual, double centerX, double centerY)
         {
             visual.MouseLeftButtonDown += PlacedItem_MouseDown;
-            visual.MouseRightButtonDown += (_, _) => SelectVisual(visual);
             visual.Cursor = Cursors.Hand;
-
-            var deleteItem = new MenuItem { Header = "Удалить" };
-            deleteItem.Click += (_, _) => RemoveVisual(visual);
-            visual.ContextMenu = new ContextMenu { Items = { deleteItem } };
 
             Canvas.SetLeft(visual, centerX - visual.Width / 2);
             Canvas.SetTop(visual, centerY - visual.Height / 2);
