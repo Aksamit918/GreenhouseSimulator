@@ -56,7 +56,10 @@
                         <RowDefinition Height="*"/>
                     </Grid.RowDefinitions>
 
-                    <TextBlock x:Name="TxtHeader" Text="Ожидание запуска..." FontSize="16" HorizontalAlignment="Center" Margin="0,0,0,10"/>
+                    <StackPanel Margin="0,0,0,10">
+                        <TextBlock x:Name="TxtHeader" Text="Ожидание запуска..." FontSize="16" HorizontalAlignment="Center"/>
+                        <TextBlock x:Name="TxtRegime" Text="" FontSize="13" HorizontalAlignment="Center" Foreground="#555" Margin="0,4,0,0"/>
+                    </StackPanel>
 
                     <Border Grid.Row="1" BorderBrush="#333" BorderThickness="3" Background="White" Margin="10">
                         <Canvas x:Name="GreenhouseCanvas" ClipToBounds="True" SizeChanged="GreenhouseCanvas_SizeChanged"/>

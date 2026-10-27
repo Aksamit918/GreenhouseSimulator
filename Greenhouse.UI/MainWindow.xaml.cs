@@ -20,6 +20,7 @@ namespace Greenhouse.UI
         private DispatcherTimer _timer;
         private List<string> _currentAlerts = new List<string>();
         private Dictionary<IActuator, bool> _actuatorStates = new Dictionary<IActuator, bool>();
+        private string? _climateRegime;
         private bool _editingExistingPlan;
         private double _tempSpread = 2;
         private double _nightTempSpread = 2;
@@ -72,6 +73,7 @@ namespace Greenhouse.UI
                 _currentAlerts.Clear();
                 TxtHistory.Text = "--- Цикл запущен ---\n";
                 _actuatorStates.Clear();
+                _climateRegime = null;
                 CheckActuatorChanges();
 
                 UpdateUI();
@@ -213,6 +215,14 @@ namespace Greenhouse.UI
                 PlansComboBox.SelectedItem = plan.CropName;
                 OverlayNewPlan.Visibility = Visibility.Collapsed;
 
+                if (_controller.IsRunning)
+                {
+                    _controller.SyncRegulation();
+                    CheckActuatorChanges();
+                }
+
+                UpdateUI();
+
                 string action = _editingExistingPlan ? "обновлён" : "создан";
                 MessageBox.Show($"План '{plan.CropName}' {action} и сохранён.", "Успех", MessageBoxButton.OK, MessageBoxImage.Information);
             }
@@ -260,12 +270,12 @@ namespace Greenhouse.UI
 
             if (!_controller.IsRunning)
             {
-                CheckActuatorChanges();
+                CheckActuatorChanges(clockAdvanced: true);
                 FinishStoppedCycle();
                 return;
             }
 
-            CheckActuatorChanges();
+            CheckActuatorChanges(clockAdvanced: true);
             UpdateUI();
         }
 
@@ -319,9 +329,16 @@ namespace Greenhouse.UI
             }
         }
 
-        private void CheckActuatorChanges(bool schemeEdited = false)
+        private void CheckActuatorChanges(bool schemeEdited = false, bool clockAdvanced = false)
         {
-            string timeStamp = $"[День {_controller.CurrentDay}, {_controller.HourOfDay}:00]";
+            int elapsed = _controller.ElapsedHours;
+            if (clockAdvanced && elapsed > 0)
+                elapsed--;
+
+            int day = elapsed / 24 + 1;
+            int hour = elapsed % 24;
+            string timeStamp = $"[День {day}, {hour}:00]";
+            LogClimateRegime(timeStamp, day, hour);
             var gh = _controller.Greenhouse;
             List<IActuator> actuators = gh.GetAllActuators();
             string temperature = $"{gh.CurrentTemperature:F1}°C";
@@ -444,6 +461,38 @@ namespace Greenhouse.UI
             _currentAlerts.Add($"• {sensorId}: {badValue:F1}");
         }
 
+        private void LogClimateRegime(string timeStamp, int day, int hour)
+        {
+            if (!TryDescribeClimate(day, hour, out string description) || _climateRegime == description)
+                return;
+
+            _climateRegime = description;
+            TxtHistory.Text = $"{timeStamp} {description}\n\n" + TxtHistory.Text;
+        }
+
+        private bool TryDescribeClimate(out string description)
+        {
+            return TryDescribeClimate(_controller.CurrentDay, _controller.HourOfDay, out description);
+        }
+
+        private bool TryDescribeClimate(int day, int hour, out string description)
+        {
+            description = "";
+            if (_controller.ActivePlan == null)
+                return false;
+
+            if (day > _controller.ActivePlan.TotalDurationDays)
+                return false;
+
+            PlanPhase phase = _controller.ActivePlan.GetPhaseForDay(day);
+            ParameterCorridor corridor = phase.GetTempCorridor(hour);
+            string period = phase.IsDaytime(hour) ? "День" : "Ночь";
+            description = $"{period}. Целевая температура {FormatValue(corridor.TargetValue)}°C (коридор {FormatValue(corridor.MinValue)}–{FormatValue(corridor.MaxValue)}).";
+            return true;
+        }
+
+        private static string FormatValue(double value) => value.ToString("0.##");
+
         private void GreenhouseCanvas_SizeChanged(object sender, SizeChangedEventArgs e)
         {
             UpdateUI();
@@ -463,6 +512,8 @@ namespace Greenhouse.UI
                     TxtHeader.Text = $"{crop}, начало цикла – {_controller.StartDate.Value:dd.MM.yyyy}, прошло: {days} суток, {hours} часов";
                 }
 
+                TxtRegime.Text = TryDescribeClimate(out string climate) ? climate : "";
+
                 if (_currentAlerts.Count > 0)
                 {
                     TxtAlerts.Text = "ВНИМАНИЕ! ОТКЛОНЕНИЯ:\n" + string.Join("\n", _currentAlerts);
@@ -478,6 +529,7 @@ namespace Greenhouse.UI
             {
                 TxtAlerts.Text = "Симуляция остановлена";
                 TxtAlerts.Foreground = Brushes.Gray;
+                TxtRegime.Text = "";
             }
 
             DrawGreenhouseMap();

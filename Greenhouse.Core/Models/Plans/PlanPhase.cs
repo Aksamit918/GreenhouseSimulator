@@ -9,12 +9,15 @@
         ParameterCorridor? NightTempCorridor = null,
         int DayDurationHours = 24)
     {
-        public ParameterCorridor GetTempCorridor(int hourOfDay)
+        public bool IsDaytime(int hourOfDay)
         {
             int dayHours = DayDurationHours is < 1 or > 24 ? 24 : DayDurationHours;
-            bool isDaytime = (hourOfDay % 24) < dayHours;
+            return NightTempCorridor is null || (hourOfDay % 24) < dayHours;
+        }
 
-            if (isDaytime || NightTempCorridor is null)
+        public ParameterCorridor GetTempCorridor(int hourOfDay)
+        {
+            if (IsDaytime(hourOfDay) || NightTempCorridor is null)
                 return TempCorridor;
 
             return NightTempCorridor;
