@@ -213,7 +213,7 @@ namespace Greenhouse.UI
                         keptActuators.Add(actuator);
                         break;
                     case string kind:
-                        AddDevice(kind, location);
+                        Remember(AddDevice(kind, location), keptSensors, keptActuators);
                         break;
                 }
             }
@@ -247,35 +247,58 @@ namespace Greenhouse.UI
                 Math.Clamp(y, 0, _greenhouse.Length));
         }
 
-        private void AddDevice(string kind, Tuple<double, double> location)
+        private static void Remember(object? device, HashSet<Sensor> sensors, HashSet<IActuator> actuators)
+        {
+            switch (device)
+            {
+                case Sensor sensor:
+                    sensors.Add(sensor);
+                    break;
+                case IActuator actuator:
+                    actuators.Add(actuator);
+                    break;
+            }
+        }
+
+        private object? AddDevice(string kind, Tuple<double, double> location)
         {
             switch (kind)
             {
                 case "Sensor_Temp":
-                    _greenhouse.AddSensor(new ActiveSensor(NextSensorId("temp"), SensorType.Temperature, location));
-                    break;
+                    var temperature = new ActiveSensor(NextSensorId("temp"), SensorType.Temperature, location);
+                    _greenhouse.AddSensor(temperature);
+                    return temperature;
                 case "Sensor_Hum":
-                    _greenhouse.AddSensor(new ActiveSensor(NextSensorId("humidity"), SensorType.Humidity, location));
-                    break;
+                    var humidity = new ActiveSensor(NextSensorId("humidity"), SensorType.Humidity, location);
+                    _greenhouse.AddSensor(humidity);
+                    return humidity;
                 case "Sensor_Ph":
-                    _greenhouse.AddSensor(new ActiveSensor(NextSensorId("ph"), SensorType.Ph, location));
-                    break;
+                    var ph = new ActiveSensor(NextSensorId("ph"), SensorType.Ph, location);
+                    _greenhouse.AddSensor(ph);
+                    return ph;
                 case "Actuator_Heater":
-                    _greenhouse.AddActuator(new Heater(location));
-                    break;
+                    var heater = new Heater(location);
+                    _greenhouse.AddActuator(heater);
+                    return heater;
                 case "Actuator_AC":
-                    _greenhouse.AddActuator(new AirConditioner(location));
-                    break;
+                    var conditioner = new AirConditioner(location);
+                    _greenhouse.AddActuator(conditioner);
+                    return conditioner;
                 case "Actuator_Humidifier":
-                    _greenhouse.AddActuator(new Humidifier(location));
-                    break;
+                    var humidifier = new Humidifier(location);
+                    _greenhouse.AddActuator(humidifier);
+                    return humidifier;
                 case "Actuator_Doser":
-                    _greenhouse.AddActuator(new FertilizerDoser(location));
-                    break;
+                    var doser = new FertilizerDoser(location);
+                    _greenhouse.AddActuator(doser);
+                    return doser;
                 case "Actuator_Light":
-                    _greenhouse.AddActuator(new LightingSystem(location));
-                    break;
+                    var lamp = new LightingSystem(location);
+                    _greenhouse.AddActuator(lamp);
+                    return lamp;
             }
+
+            return null;
         }
 
         private string NextSensorId(string prefix)
