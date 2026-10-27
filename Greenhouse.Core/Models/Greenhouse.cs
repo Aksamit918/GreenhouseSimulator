@@ -75,6 +75,35 @@ namespace GreenhouseSimulator.Core.Models
 
         public List<IActuator> GetAllActuators() => new List<IActuator>(_actuators);
 
+        public string? DescribeMissingRegulators()
+        {
+            var missing = new List<string>();
+            if (!HasActuator<Heater>())
+                missing.Add("обогреватель");
+            if (!HasActuator<AirConditioner>())
+                missing.Add("кондиционер");
+            if (!HasActuator<Humidifier>())
+                missing.Add("увлажнитель");
+            if (!HasActuator<FertilizerDoser>())
+                missing.Add("дозатор удобрений");
+
+            if (missing.Count == 0)
+                return null;
+
+            return "Нет регулирующих устройств: " + string.Join(", ", missing) + ". Показатели без них не регулировались.";
+        }
+
+        private bool HasActuator<TActuator>() where TActuator : class
+        {
+            foreach (IActuator actuator in _actuators)
+            {
+                if (actuator is TActuator)
+                    return true;
+            }
+
+            return false;
+        }
+
         public void Tick(PlanPhase phase, int hourOfDay)
         {
             ArgumentNullException.ThrowIfNull(phase);
@@ -87,16 +116,31 @@ namespace GreenhouseSimulator.Core.Models
 
         private void ApplyNoise(PlanPhase phase, int hourOfDay)
         {
-            CurrentTemperature = WalkWithin(CurrentTemperature, phase.GetTempCorridor(hourOfDay), TemperatureNoiseAmplitude);
-            CurrentHumidity = WalkWithin(CurrentHumidity, phase.HumidityCorridor, HumidityNoiseAmplitude);
-            CurrentPh = WalkWithin(CurrentPh, phase.PhCorridor, PhNoiseAmplitude);
+            CurrentTemperature = NextValue(
+                CurrentTemperature,
+                phase.GetTempCorridor(hourOfDay),
+                TemperatureNoiseAmplitude,
+                HasActuator<Heater>() && HasActuator<AirConditioner>());
+            CurrentHumidity = NextValue(
+                CurrentHumidity,
+                phase.HumidityCorridor,
+                HumidityNoiseAmplitude,
+                HasActuator<Humidifier>() && HasActuator<Heater>());
+            CurrentPh = NextValue(
+                CurrentPh,
+                phase.PhCorridor,
+                PhNoiseAmplitude,
+                HasActuator<FertilizerDoser>());
         }
 
-        private static double WalkWithin(double value, ParameterCorridor corridor, double amplitude)
+        private static double NextValue(double value, ParameterCorridor corridor, double amplitude, bool regulated)
         {
+            double next = value + RandomNoise(amplitude);
+            if (!regulated)
+                return next;
+
             double width = corridor.MaxValue - corridor.MinValue;
             double padding = CorridorPaddingFraction * width;
-            double next = value + RandomNoise(amplitude);
             return Math.Clamp(next, corridor.MinValue - padding, corridor.MaxValue + padding);
         }
 

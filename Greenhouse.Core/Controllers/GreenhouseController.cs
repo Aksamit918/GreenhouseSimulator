@@ -161,7 +161,17 @@ namespace GreenhouseSimulator.Core.Controllers
 
                 if (ElapsedHours >= _activePlan.TotalDurationDays * 24)
                 {
-                    LastResult = SimulationResult.Completed;
+                    string? regulationFailure = _greenhouse.DescribeMissingRegulators();
+                    if (regulationFailure == null)
+                    {
+                        LastResult = SimulationResult.Completed;
+                    }
+                    else
+                    {
+                        LastResult = SimulationResult.Failed;
+                        FailureMessage = regulationFailure;
+                    }
+
                     StopCycle();
                 }
             }

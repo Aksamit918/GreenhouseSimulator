@@ -300,7 +300,7 @@ namespace Greenhouse.UI
                     break;
                 case SimulationResult.Failed:
                     MessageBox.Show(
-                        $"Цикл «{crop}» завершился с ошибкой и не был выполнен.\n{failureMessage}",
+                        $"Цикл «{crop}» не был выполнен.\n{failureMessage}",
                         "Цикл не выполнен",
                         MessageBoxButton.OK,
                         MessageBoxImage.Error);
