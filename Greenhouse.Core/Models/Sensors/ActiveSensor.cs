@@ -7,7 +7,8 @@ namespace GreenhouseSimulator.Core.Models.Sensors
     public class ActiveSensor : Sensor
     {
         private double _targetValue;
-        private double _allowedTolerance;
+        private double _toleranceBelow;
+        private double _toleranceAbove;
 
         public event EventHandler<ThresholdExceededEventArgs> OnThresholdExceeded;
 
@@ -16,23 +17,33 @@ namespace GreenhouseSimulator.Core.Models.Sensors
             :base (id, type, location)
         { 
             _targetValue = 0.0;
-            _allowedTolerance = 0.0;
+            _toleranceBelow = 0.0;
+            _toleranceAbove = 0.0;
         }
 
-        public void SetThresholds(double target, double tolerance)
+        public void SetThresholds(double target, double toleranceBelow, double toleranceAbove)
         {
+            if (toleranceBelow < 0)
+                throw new ArgumentOutOfRangeException(nameof(toleranceBelow), "Tolerance cannot be negative.");
+
+            if (toleranceAbove < 0)
+                throw new ArgumentOutOfRangeException(nameof(toleranceAbove), "Tolerance cannot be negative.");
+
             _targetValue = target;
-            _allowedTolerance = tolerance;
+            _toleranceBelow = toleranceBelow;
+            _toleranceAbove = toleranceAbove;
         }
 
         public override void UpdateMeasurement(double newValue)
         {
             CurrentValue = newValue;
 
-            double deviation = Math.Abs(newValue - _targetValue);
+            double signedDeviation = newValue - _targetValue;
+            bool exceeded = signedDeviation < -_toleranceBelow || signedDeviation > _toleranceAbove;
 
-            if (deviation > _allowedTolerance)
+            if (exceeded)
             {
+                double deviation = Math.Abs(signedDeviation);
                 var args = new ThresholdExceededEventArgs
                 {
                     SensorId = Id,

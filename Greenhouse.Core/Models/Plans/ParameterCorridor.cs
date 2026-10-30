@@ -31,9 +31,14 @@ namespace GreenhouseSimulator.Core.Models.Plans
             return MinValue <= value && MaxValue >= value;
         }
 
-        public double GetTolerance(double value)
+        public double GetToleranceBelow()
         {
-            return Math.Max(TargetValue - MinValue, MaxValue - TargetValue);
+            return TargetValue - MinValue;
+        }
+
+        public double GetToleranceAbove()
+        {
+            return MaxValue - TargetValue;
         }
     }
 }

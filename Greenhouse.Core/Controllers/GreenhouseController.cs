@@ -262,7 +262,7 @@ namespace GreenhouseSimulator.Core.Controllers
                     continue;
                 }
 
-                sensor.SetThresholds(corridor.TargetValue, corridor.GetTolerance(corridor.TargetValue));
+                sensor.SetThresholds(corridor.TargetValue, corridor.GetToleranceBelow(), corridor.GetToleranceAbove());
             }
         }
 
