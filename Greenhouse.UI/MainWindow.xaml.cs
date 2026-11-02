@@ -22,10 +22,6 @@ namespace Greenhouse.UI
         private Dictionary<IActuator, bool> _actuatorStates = new Dictionary<IActuator, bool>();
         private string? _climateRegime;
         private bool _editingExistingPlan;
-        private double _tempSpread = 2;
-        private double _nightTempSpread = 2;
-        private double _humiditySpread = 5;
-        private double _phSpread = 0.5;
 
         public MainWindow()
         {
@@ -120,20 +116,16 @@ namespace Greenhouse.UI
         private void BtnShowNewPlan_Click(object sender, RoutedEventArgs e)
         {
             _editingExistingPlan = false;
-            _tempSpread = 2;
-            _nightTempSpread = 2;
-            _humiditySpread = 5;
-            _phSpread = 0.5;
 
             PlanFormTitle.Text = "Новый план";
             InputCropName.IsEnabled = true;
             InputCropName.Text = "";
             InputDuration.Text = "1";
-            InputTemp.Text = "25";
-            InputNightTemp.Text = "22";
+            SetCorridorInputs(InputDayTempMin, InputDayTempTarget, InputDayTempMax, 23, 25, 27);
+            SetCorridorInputs(InputNightTempMin, InputNightTempTarget, InputNightTempMax, 20, 22, 24);
             InputDayLength.Text = "16";
-            InputHum.Text = "65";
-            InputPh.Text = "6.0";
+            SetCorridorInputs(InputHumMin, InputHumTarget, InputHumMax, 60, 65, 70);
+            SetCorridorInputs(InputPhMin, InputPhTarget, InputPhMax, 5.5, 6, 6.5);
             InputLight.Text = "14";
             OverlayNewPlan.Visibility = Visibility.Visible;
         }
@@ -153,20 +145,16 @@ namespace Greenhouse.UI
                 PlanPhase phase = plan.GetPhaseForDay(1);
 
                 _editingExistingPlan = true;
-                _tempSpread = Spread(phase.TempCorridor);
-                _nightTempSpread = phase.NightTempCorridor == null ? _tempSpread : Spread(phase.NightTempCorridor);
-                _humiditySpread = Spread(phase.HumidityCorridor);
-                _phSpread = Spread(phase.PhCorridor);
 
                 PlanFormTitle.Text = "Изменить план";
                 InputCropName.IsEnabled = false;
                 InputCropName.Text = plan.CropName;
                 InputDuration.Text = plan.TotalDurationDays.ToString();
-                InputTemp.Text = phase.TempCorridor.TargetValue.ToString();
-                InputNightTemp.Text = (phase.NightTempCorridor?.TargetValue ?? phase.TempCorridor.TargetValue).ToString();
+                SetCorridorInputs(InputDayTempMin, InputDayTempTarget, InputDayTempMax, phase.TempCorridor);
+                SetCorridorInputs(InputNightTempMin, InputNightTempTarget, InputNightTempMax, phase.NightTempCorridor ?? phase.TempCorridor);
                 InputDayLength.Text = phase.DayDurationHours.ToString();
-                InputHum.Text = phase.HumidityCorridor.TargetValue.ToString();
-                InputPh.Text = phase.PhCorridor.TargetValue.ToString();
+                SetCorridorInputs(InputHumMin, InputHumTarget, InputHumMax, phase.HumidityCorridor);
+                SetCorridorInputs(InputPhMin, InputPhTarget, InputPhMax, phase.PhCorridor);
                 InputLight.Text = phase.LightDurationHours.ToString();
                 OverlayNewPlan.Visibility = Visibility.Visible;
             }
@@ -188,21 +176,21 @@ namespace Greenhouse.UI
                 int days = int.Parse(InputDuration.Text);
                 int dayLength = int.Parse(InputDayLength.Text);
                 int lightHours = int.Parse(InputLight.Text);
-                double dayTemp = ParseUserNumber(InputTemp.Text);
-                double nightTemp = ParseUserNumber(InputNightTemp.Text);
-                double humidity = ParseUserNumber(InputHum.Text);
-                double ph = ParseUserNumber(InputPh.Text);
+                ParameterCorridor dayTemp = ReadCorridor(InputDayTempMin, InputDayTempTarget, InputDayTempMax);
+                ParameterCorridor nightTemp = ReadCorridor(InputNightTempMin, InputNightTempTarget, InputNightTempMax);
+                ParameterCorridor humidity = ReadCorridor(InputHumMin, InputHumTarget, InputHumMax);
+                ParameterCorridor ph = ReadCorridor(InputPhMin, InputPhTarget, InputPhMax);
 
                 var plan = new GrowingPlan(InputCropName.Text);
                 for (int day = 1; day <= days; day++)
                 {
                     plan.AddPhase(new PlanPhase(
                         day,
-                        Corridor(dayTemp, _tempSpread),
-                        Corridor(ph, _phSpread),
-                        Corridor(humidity, _humiditySpread),
+                        dayTemp,
+                        ph,
+                        humidity,
                         lightHours,
-                        Corridor(nightTemp, _nightTempSpread),
+                        nightTemp,
                         dayLength));
                 }
 
@@ -226,6 +214,14 @@ namespace Greenhouse.UI
                 string action = _editingExistingPlan ? "обновлён" : "создан";
                 MessageBox.Show($"План '{plan.CropName}' {action} и сохранён.", "Успех", MessageBoxButton.OK, MessageBoxImage.Information);
             }
+            catch (ArgumentOutOfRangeException ex) when (ex.ParamName is "minValue" or "maxValue" or "targetValue")
+            {
+                MessageBox.Show(
+                    "Минимум должен быть меньше максимума, а идеальное значение — между ними.",
+                    "Ошибка",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
+            }
             catch (Exception ex)
             {
                 MessageBox.Show($"Ошибка при сохранении плана:\n{ex.Message}", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
@@ -237,15 +233,27 @@ namespace Greenhouse.UI
             return double.Parse(text.Trim().Replace('.', ','));
         }
 
-        private static double Spread(ParameterCorridor corridor)
+        private static void SetCorridorInputs(TextBox min, TextBox target, TextBox max, ParameterCorridor corridor)
         {
-            return Math.Max(corridor.TargetValue - corridor.MinValue, corridor.MaxValue - corridor.TargetValue);
+            SetCorridorInputs(min, target, max, corridor.MinValue, corridor.TargetValue, corridor.MaxValue);
         }
 
-        private static ParameterCorridor Corridor(double target, double spread)
+        private static void SetCorridorInputs(TextBox min, TextBox target, TextBox max, double minValue, double targetValue, double maxValue)
         {
-            return new ParameterCorridor(target - spread, target + spread, target);
+            min.Text = FormatPlanNumber(minValue);
+            target.Text = FormatPlanNumber(targetValue);
+            max.Text = FormatPlanNumber(maxValue);
         }
+
+        private static ParameterCorridor ReadCorridor(TextBox min, TextBox target, TextBox max)
+        {
+            return new ParameterCorridor(
+                ParseUserNumber(min.Text),
+                ParseUserNumber(max.Text),
+                ParseUserNumber(target.Text));
+        }
+
+        private static string FormatPlanNumber(double value) => value.ToString("0.##");
 
         private void Timer_Tick(object sender, EventArgs e)
         {
