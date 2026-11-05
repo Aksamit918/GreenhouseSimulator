@@ -12,7 +12,7 @@ namespace GreenhouseSimulator.Core.Models.Sensors
 
         public event EventHandler<ThresholdExceededEventArgs> OnThresholdExceeded;
 
-        public ActiveSensor(string id, SensorType type, Tuple<double, double> location)
+        public ActiveSensor(string id, SensorType type, (double X, double Y) location)
        
             :base (id, type, location)
         { 

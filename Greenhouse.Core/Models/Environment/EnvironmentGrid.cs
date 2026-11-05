@@ -33,26 +33,26 @@ namespace GreenhouseSimulator.Core.Models.Environment
             }
         }
 
-        public Tuple<double, double> GetCellCenter(int i, int j)
+        public (double X, double Y) GetCellCenter(int i, int j)
         {
             double x = (i + 0.5) * _config.GridStep;
             double y = (j + 0.5) * _config.GridStep;
-            
-            return Tuple.Create(x, y);
+
+            return (x, y);
         }
 
-        public (int i, int j) WorldToGridIndex(Tuple<double, double> coordinates)
+        public (int i, int j) WorldToGridIndex((double X, double Y) coordinates)
         {
-            int i = Math.Clamp((int)(coordinates.Item1 / _config.GridStep), 0, WidthCells - 1);
-            int j = Math.Clamp((int)(coordinates.Item2 / _config.GridStep), 0, LengthCells - 1);
+            int i = Math.Clamp((int)(coordinates.X / _config.GridStep), 0, WidthCells - 1);
+            int j = Math.Clamp((int)(coordinates.Y / _config.GridStep), 0, LengthCells - 1);
 
             return (i, j);
         }
 
-        private double GetInterpolatedValue(Tuple<double, double> location, Func<ClimateCell, double> selector)
+        private double GetInterpolatedValue((double X, double Y) location, Func<ClimateCell, double> selector)
         {
-            double gx = (location.Item1 / _config.GridStep) - 0.5;
-            double gy = (location.Item2 / _config.GridStep) - 0.5;
+            double gx = (location.X / _config.GridStep) - 0.5;
+            double gy = (location.Y / _config.GridStep) - 0.5;
 
             int i0 = (int)Math.Floor(gx);
             int j0 = (int)Math.Floor(gy);
@@ -78,16 +78,16 @@ namespace GreenhouseSimulator.Core.Models.Environment
             return top * (1 - ty) + bottom * ty;
         }
 
-        public double GetTemperatureAt(Tuple<double, double> location) =>
+        public double GetTemperatureAt((double X, double Y) location) =>
             GetInterpolatedValue(location, cell => cell.Temperature);
 
-        public double GetHumidityAt(Tuple<double, double> location) =>
+        public double GetHumidityAt((double X, double Y) location) =>
             GetInterpolatedValue(location, cell => cell.RelativeHumidity);
 
-        public double GetLightAt(Tuple<double, double> location) =>
+        public double GetLightAt((double X, double Y) location) =>
             GetInterpolatedValue(location, cell => cell.Light);
 
-        public double GetPhAt(Tuple<double, double> location) =>
+        public double GetPhAt((double X, double Y) location) =>
             GetInterpolatedValue(location, cell => cell.Ph);
     }
 }

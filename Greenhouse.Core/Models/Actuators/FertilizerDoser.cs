@@ -1,28 +1,23 @@
-﻿using System;
-
-namespace GreenhouseSimulator.Core.Models.Actuators
+﻿namespace GreenhouseSimulator.Core.Models.Actuators
 {
     public class FertilizerDoser : IActuator
     {
         private readonly double _pHRate;
 
         public bool IsOn { get; private set; }
-        public Tuple<double, double> Location { get; private set; }
+        public (double X, double Y) Location { get; private set; }
 
         public double PhDelta => IsOn ? _pHRate : 0.0;
 
-        public FertilizerDoser(Tuple<double, double> location, double pHRate = 0.35)
+        public FertilizerDoser((double X, double Y) location, double pHRate = 0.35)
         {
-            ArgumentNullException.ThrowIfNull(location);
-
             Location = location;
             _pHRate = pHRate;
             IsOn = false;
         }
 
-        public void MoveTo(Tuple<double, double> location)
+        public void MoveTo((double X, double Y) location)
         {
-            ArgumentNullException.ThrowIfNull(location);
             Location = location;
         }
 

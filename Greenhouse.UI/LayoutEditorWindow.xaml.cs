@@ -139,7 +139,7 @@ namespace Greenhouse.UI
                 PlaceModel(actuator, actuator.Location);
         }
 
-        private void PlaceModel(object device, Tuple<double, double> location)
+        private void PlaceModel(object device, (double X, double Y) location)
         {
             string? kind = KindOf(device);
             if (kind == null)
@@ -150,8 +150,8 @@ namespace Greenhouse.UI
                 return;
 
             visual.Tag = device;
-            double x = location.Item1 / _greenhouse.Width * EditorCanvas.ActualWidth;
-            double y = location.Item2 / _greenhouse.Length * EditorCanvas.ActualHeight;
+            double x = location.X / _greenhouse.Width * EditorCanvas.ActualWidth;
+            double y = location.Y / _greenhouse.Length * EditorCanvas.ActualHeight;
             PlaceVisual(visual, x, y);
         }
 
@@ -201,7 +201,7 @@ namespace Greenhouse.UI
                 if (child is not FrameworkElement element || element.Tag == null)
                     continue;
 
-                Tuple<double, double> location = ToGreenhousePoint(element);
+                (double X, double Y) location = ToGreenhousePoint(element);
                 switch (element.Tag)
                 {
                     case Sensor sensor:
@@ -231,7 +231,7 @@ namespace Greenhouse.UI
             }
         }
 
-        private Tuple<double, double> ToGreenhousePoint(FrameworkElement element)
+        private (double X, double Y) ToGreenhousePoint(FrameworkElement element)
         {
             double left = Canvas.GetLeft(element);
             double top = Canvas.GetTop(element);
@@ -242,7 +242,7 @@ namespace Greenhouse.UI
             double centerY = top + element.Height / 2;
             double x = centerX / EditorCanvas.ActualWidth * _greenhouse.Width;
             double y = centerY / EditorCanvas.ActualHeight * _greenhouse.Length;
-            return Tuple.Create(
+            return (
                 Math.Clamp(x, 0, _greenhouse.Width),
                 Math.Clamp(y, 0, _greenhouse.Length));
         }
@@ -260,7 +260,7 @@ namespace Greenhouse.UI
             }
         }
 
-        private object? AddDevice(string kind, Tuple<double, double> location)
+        private object? AddDevice(string kind, (double X, double Y) location)
         {
             switch (kind)
             {

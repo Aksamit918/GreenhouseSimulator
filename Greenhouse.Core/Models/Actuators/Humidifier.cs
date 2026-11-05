@@ -1,28 +1,23 @@
-﻿using System;
-
-namespace GreenhouseSimulator.Core.Models.Actuators
+﻿namespace GreenhouseSimulator.Core.Models.Actuators
 {
     public class Humidifier : IActuator
     {
         private readonly double _humidityRate;
 
         public bool IsOn { get; private set; }
-        public Tuple<double, double> Location { get; private set; }
+        public (double X, double Y) Location { get; private set; }
 
         public double HumidityDelta => IsOn ? _humidityRate : 0.0;
 
-        public Humidifier(Tuple<double, double> location, double humidityRate = 6.0)
+        public Humidifier((double X, double Y) location, double humidityRate = 6.0)
         {
-            ArgumentNullException.ThrowIfNull(location);
-
             Location = location;
             _humidityRate = humidityRate;
             IsOn = false;
         }
 
-        public void MoveTo(Tuple<double, double> location)
+        public void MoveTo((double X, double Y) location)
         {
-            ArgumentNullException.ThrowIfNull(location);
             Location = location;
         }
 

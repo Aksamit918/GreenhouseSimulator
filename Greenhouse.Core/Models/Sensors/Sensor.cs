@@ -1,5 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Text;
 
 namespace GreenhouseSimulator.Core.Models.Sensors
@@ -8,10 +7,10 @@ namespace GreenhouseSimulator.Core.Models.Sensors
     {
         public string Id { get; }
         public SensorType Type { get; }
-        public Tuple<double, double> Location { get; private set; }
+        public (double X, double Y) Location { get; private set; }
         public double CurrentValue { get; protected set; }
 
-        public Sensor(string id, SensorType type, Tuple<double, double> location)
+        public Sensor(string id, SensorType type, (double X, double Y) location)
         {
             Id = id;
             Type = type;
@@ -19,9 +18,8 @@ namespace GreenhouseSimulator.Core.Models.Sensors
             CurrentValue = 0.0;
         }
 
-        public void MoveTo(Tuple<double, double> location)
+        public void MoveTo((double X, double Y) location)
         {
-            ArgumentNullException.ThrowIfNull(location);
             Location = location;
         }
 

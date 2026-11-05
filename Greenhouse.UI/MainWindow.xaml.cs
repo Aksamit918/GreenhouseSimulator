@@ -557,15 +557,15 @@ namespace Greenhouse.UI
 
             foreach (var act in gh.GetAllActuators())
             {
-                double px = act.Location.Item1 * scaleX;
-                double py = act.Location.Item2 * scaleY;
+                double px = act.Location.X * scaleX;
+                double py = act.Location.Y * scaleY;
                 DrawActuator(act, px, py);
             }
 
             foreach (var sensor in gh.GetAllSensors())
             {
-                double px = sensor.Location.Item1 * scaleX;
-                double py = sensor.Location.Item2 * scaleY;
+                double px = sensor.Location.X * scaleX;
+                double py = sensor.Location.Y * scaleY;
                 DrawSensor(sensor, px, py);
             }
         }

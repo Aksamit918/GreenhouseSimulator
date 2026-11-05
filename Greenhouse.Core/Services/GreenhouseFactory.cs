@@ -18,15 +18,15 @@ namespace GreenhouseSimulator.Core.Services
 
             var greenhouse = new Greenhouse(DefaultWidth, DefaultLength);
 
-            greenhouse.AddSensor(new ActiveSensor("temp-air", SensorType.Temperature, Tuple.Create(2.0, 1.0)));
-            greenhouse.AddSensor(new ActiveSensor("humidity-air", SensorType.Humidity, Tuple.Create(2.0, 5.0)));
-            greenhouse.AddSensor(new ActiveSensor("ph-tank", SensorType.Ph, Tuple.Create(8.0, 2.0)));
+            greenhouse.AddSensor(new ActiveSensor("temp-air", SensorType.Temperature, (2.0, 1.0)));
+            greenhouse.AddSensor(new ActiveSensor("humidity-air", SensorType.Humidity, (2.0, 5.0)));
+            greenhouse.AddSensor(new ActiveSensor("ph-tank", SensorType.Ph, (8.0, 2.0)));
 
-            greenhouse.AddActuator(new Heater(Tuple.Create(1.0, 3.0)));
-            greenhouse.AddActuator(new AirConditioner(Tuple.Create(9.0, 3.0)));
-            greenhouse.AddActuator(new Humidifier(Tuple.Create(1.0, 5.0)));
-            greenhouse.AddActuator(new LightingSystem(Tuple.Create(5.0, 5.5)));
-            greenhouse.AddActuator(new FertilizerDoser(Tuple.Create(9.0, 5.0)));
+            greenhouse.AddActuator(new Heater((1.0, 3.0)));
+            greenhouse.AddActuator(new AirConditioner((9.0, 3.0)));
+            greenhouse.AddActuator(new Humidifier((1.0, 5.0)));
+            greenhouse.AddActuator(new LightingSystem((5.0, 5.5)));
+            greenhouse.AddActuator(new FertilizerDoser((9.0, 5.0)));
 
             var repository = new FilePlanRepository(plansDirectory);
             var controller = new GreenhouseController(greenhouse, repository);
