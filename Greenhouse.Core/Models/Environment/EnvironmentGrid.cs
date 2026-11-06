@@ -119,5 +119,71 @@ namespace GreenhouseSimulator.Core.Models.Environment
                 cell2.Temperature -= _config.WallInsulationCoeff * (cell2.Temperature - outsideTemp) * dt;
             }
         }
+
+        public void ApplyDiffusion(double dt)
+        {
+            double effectiveD = Math.Min(_config.DiffusionCoeff * dt, _config.MaxDiffusionStepFactor);
+
+            for (int i = 0; i < WidthCells; i++)
+            {
+                for (int j = 0; j < LengthCells; j++)
+                {
+                    _nextCells[i, j].CopyFrom(_currentCells[i, j]);
+
+                    double tNeighbours = 0.0;
+                    double hNeighbours = 0.0;
+                    int count = 0;
+
+                    if (i > 0)
+                    {
+                        tNeighbours += _currentCells[i - 1, j].Temperature;
+                        hNeighbours += _currentCells[i - 1, j].AbsoluteHumidity;
+                        count++;
+                    }
+                    if (i < WidthCells - 1)
+                    {
+                        tNeighbours += _currentCells[i + 1, j].Temperature;
+                        hNeighbours += _currentCells[i + 1, j].AbsoluteHumidity;
+                        count++;
+                    }
+                    if (j > 0)
+                    {
+                        tNeighbours += _currentCells[i, j - 1].Temperature;
+                        hNeighbours += _currentCells[i, j - 1].AbsoluteHumidity;
+                        count++;
+                    }
+                    if (j < LengthCells - 1)
+                    {
+                        tNeighbours += _currentCells[i, j + 1].Temperature;
+                        hNeighbours += _currentCells[i, j + 1].AbsoluteHumidity;
+                        count++;
+                    }
+
+                    double currentTemperature = _currentCells[i, j].Temperature;
+                    double newT = currentTemperature + effectiveD * (tNeighbours / count - currentTemperature);
+
+                    double currentHumidity = _currentCells[i, j].AbsoluteHumidity;
+                    double newH = currentHumidity + effectiveD * (hNeighbours / count - currentHumidity);
+
+
+                    _nextCells[i, j].Temperature = newT;
+                    _nextCells[i, j].AbsoluteHumidity = newH;
+                }
+            }
+
+            (_currentCells, _nextCells) = (_nextCells, _currentCells);
+        }
+
+        public void StepPhysics(double hourOfDay)
+        {
+            double dt = _config.HoursPerTick / _config.SubstepsPerHour;
+            double outsideTemp = 0.0;
+            for (int i = 0; i < _config.SubstepsPerHour; i++)
+            {
+                outsideTemp = GetOutsideTemperature(hourOfDay);
+                ApplyWallHeatLoss(outsideTemp, dt);
+                ApplyDiffusion(dt);
+            }
+        }
     }
 }

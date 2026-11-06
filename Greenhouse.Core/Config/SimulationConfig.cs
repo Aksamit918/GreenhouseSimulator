@@ -14,8 +14,10 @@ namespace GreenhouseSimulator.Core.Config
         public double GridStep { get; set; } = 0.5;
         public double WallInsulationCoeff { get; set; } = 0.15;
         public double DiffusionCoeff { get; set; } = 0.8;
+        public double MaxDiffusionStepFactor { get; set; } = 0.24;
         public double TMin { get; set; } = 5.0;
         public double TMax { get; set; } = 15.0;
+        public double HoursPerTick { get; set } = 1.0;
         public int SubstepsPerHour { get; set; } = 12;
         public double OutsideMinTempHour { get; set; } = 4.0;
         public int RandomSeed { get; set; } = 42;
