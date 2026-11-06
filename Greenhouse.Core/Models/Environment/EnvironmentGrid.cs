@@ -89,5 +89,35 @@ namespace GreenhouseSimulator.Core.Models.Environment
 
         public double GetPhAt((double X, double Y) location) =>
             GetInterpolatedValue(location, cell => cell.Ph);
+
+        public double GetOutsideTemperature(double hourOfDay)
+        {
+            double t_avg = (_config.TMax +  _config.TMin) / 2;
+            double A = (_config.TMax - _config.TMin) / 2;
+            double h_min = _config.OutsideMinTempHour;
+
+            return t_avg - A * Math.Cos((hourOfDay - h_min) * (Math.PI / 12.0));
+        }
+
+        public void ApplyWallHeatLoss(double outsideTemp, double dt)
+        {
+            for (int i = 0; i < WidthCells; i++)
+            {
+                var cell1 = _currentCells[i, 0];
+                cell1.Temperature -= _config.WallInsulationCoeff * (cell1.Temperature - outsideTemp) * dt;
+
+                var cell2 = _currentCells[i, LengthCells - 1];
+                cell2.Temperature -= _config.WallInsulationCoeff * (cell2.Temperature - outsideTemp) * dt;
+            }
+
+            for (int j = 0; j < LengthCells; j++)
+            {
+                var cell1 = _currentCells[0, j];
+                cell1.Temperature -= _config.WallInsulationCoeff * (cell1.Temperature - outsideTemp) * dt;
+
+                var cell2 = _currentCells[WidthCells - 1, j];
+                cell2.Temperature -= _config.WallInsulationCoeff * (cell2.Temperature - outsideTemp) * dt;
+            }
+        }
     }
 }
