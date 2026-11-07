@@ -27,8 +27,15 @@ namespace GreenhouseSimulator.Core.Models.Environment
             {
                 for (int j = 0; j < LengthCells; j++)
                 {
-                    _currentCells[i, j] = new ClimateCell();
+                    _currentCells[i, j] = new ClimateCell
+                    {
+                        Temperature = config.InitialTemperature,
+                        AbsoluteHumidity = config.InitialAbsoluteHumidity,
+                        Light = config.InitialLight,
+                        Ph = config.InitialPh
+                    };
                     _nextCells[i, j] = new ClimateCell();
+                    _nextCells[i, j].CopyFrom(_currentCells[i, j]);
                 }
             }
         }
@@ -194,7 +201,7 @@ namespace GreenhouseSimulator.Core.Models.Environment
                 outsideTemp = GetOutsideTemperature(hourOfDay + i * dt);
                 ApplyWallHeatLoss(outsideTemp, dt);
                 ApplyDiffusion(dt);
-
+                ApplyPlantMetabolism(dt);
                 EnforceLimits();
             }
         }
@@ -222,6 +229,21 @@ namespace GreenhouseSimulator.Core.Models.Environment
                 {
                     _currentCells[i, j].ApplyDelta(delta);
                     _currentCells[i, j].EnforcePhysicalLimits(_config.MinPh, _config.MaxPh);
+                }
+            }
+        }
+
+        public void ApplyPlantMetabolism(double dt)
+        {
+            for (int i = 0; i < WidthCells; i++)
+            {
+                for (int j = 0; j < LengthCells; j++)
+                {
+                    var cell = _currentCells[i, j];
+
+                    double deltaAh = (_config.BaseTranspirationRate + _config.LightTranspirationFactor * cell.Light) * dt;
+                    cell.AbsoluteHumidity += deltaAh;
+                    cell.Ph -= _config.PhDriftRate * dt;
                 }
             }
         }

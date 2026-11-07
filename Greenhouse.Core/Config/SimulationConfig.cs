@@ -27,6 +27,9 @@ namespace GreenhouseSimulator.Core.Config
         public double InitialPh { get; set; } = 6.0;
         public double MinPh { get; set; } = 0.0;
         public double MaxPh { get; set; } = 14.0;
+        public double BaseTranspirationRate { get; set; } = 0.4;
+        public double LightTranspirationFactor { get; set; } = 0.002;
+        public double PhDriftRate { get; set; } = 0.03;
 
         public void SaveToFile(string filePath)
         {
