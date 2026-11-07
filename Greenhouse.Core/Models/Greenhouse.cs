@@ -126,6 +126,7 @@ namespace GreenhouseSimulator.Core.Models
 
                     case FertilizerDoser doser:
                         delta += new ClimateDelta(0.0, 0.0, 0.0, doser.PhDelta);
+                        doser.RecordConsumption(Config.DefaultDoserMlPerHour * Config.HoursPerTick);
                         break;
                 }
             }

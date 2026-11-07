@@ -181,6 +181,71 @@ namespace GreenhouseSimulator.Core.Models.Environment
             (_currentCells, _nextCells) = (_nextCells, _currentCells);
         }
 
+        public void ApplyGlobalDelta(ClimateDelta delta)
+        {
+            for (int i = 0; i < WidthCells; i++)
+            {
+                for (int j = 0; j < LengthCells; j++)
+                {
+                    _currentCells[i, j].ApplyDelta(delta);
+                    _currentCells[i, j].EnforcePhysicalLimits(_config.MinPh, _config.MaxPh);
+                }
+            }
+        }
+
+        public void ApplyPlantMetabolism(double dt)
+        {
+            for (int i = 0; i < WidthCells; i++)
+            {
+                for (int j = 0; j < LengthCells; j++)
+                {
+                    var cell = _currentCells[i, j];
+
+                    double deltaAh = (_config.BaseTranspirationRate + _config.LightTranspirationFactor * cell.Light) * dt;
+                    cell.AbsoluteHumidity += deltaAh;
+                    cell.Ph -= _config.PhDriftRate * dt;
+                }
+            }
+        }
+
+        public void ApplyHydroponicCirculation(double dt)
+        {
+            double effectivePhD = Math.Min(_config.PhDiffusionCoeff * dt, _config.MaxDiffusionStepFactor);
+            double effectiveFlow = Math.Min(_config.SolutionFlowSpeed * dt, _config.MaxDiffusionStepFactor);
+
+            for (int i = 0; i < WidthCells; i++)
+            {
+                for (int j = 0; j < LengthCells; j++)
+                {
+                    _nextCells[i, j].CopyFrom(_currentCells[i, j]);
+
+                    int count = 0;
+                    double hNeighbours = 0.0;
+
+                    if (i > 0)
+                    {
+                        hNeighbours += _currentCells[i - 1, j].AbsoluteHumidity;
+                        count++;
+                    }
+                    if (i < WidthCells - 1)
+                    {
+                        hNeighbours += _currentCells[i + 1, j].AbsoluteHumidity;
+                        count++;
+                    }
+                    if (j > 0)
+                    {
+                        hNeighbours += _currentCells[i, j - 1].AbsoluteHumidity;
+                        count++;
+                    }
+                    if (j < LengthCells - 1)
+                    {
+                        hNeighbours += _currentCells[i, j + 1].AbsoluteHumidity;
+                        count++;
+                    }
+                }
+            }
+        }
+
         private void EnforceLimits()
         {
             for (int i = 0; i < WidthCells; i++)
@@ -219,33 +284,6 @@ namespace GreenhouseSimulator.Core.Models.Environment
             }
 
             return sum / (WidthCells * LengthCells);
-        }
-
-        public void ApplyGlobalDelta(ClimateDelta delta)
-        {
-            for (int i = 0; i < WidthCells; i++)
-            {
-                for (int j = 0; j < LengthCells; j++)
-                {
-                    _currentCells[i, j].ApplyDelta(delta);
-                    _currentCells[i, j].EnforcePhysicalLimits(_config.MinPh, _config.MaxPh);
-                }
-            }
-        }
-
-        public void ApplyPlantMetabolism(double dt)
-        {
-            for (int i = 0; i < WidthCells; i++)
-            {
-                for (int j = 0; j < LengthCells; j++)
-                {
-                    var cell = _currentCells[i, j];
-
-                    double deltaAh = (_config.BaseTranspirationRate + _config.LightTranspirationFactor * cell.Light) * dt;
-                    cell.AbsoluteHumidity += deltaAh;
-                    cell.Ph -= _config.PhDriftRate * dt;
-                }
-            }
         }
 
         public double GetAverageTemperature() => GetAverageValue(cell => cell.Temperature);
