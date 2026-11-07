@@ -14,10 +14,7 @@ namespace GreenhouseSimulator.Core.Models.Environment
         public double Light { get; set; } = 0.0;
         public double Ph {  get; set; } = 5.5;
 
-        public double RelativeHumidity => Math.Clamp(
-            AbsoluteHumidity / (216.7 * 6.112 * Math.Exp(17.67 * Temperature / (Temperature + 243.5)) / (Temperature + 273.15)) * 100,
-            0.0,
-            100);
+        public double RelativeHumidity => Psychrometrics.GetRelativeHumidity(Temperature, AbsoluteHumidity);
 
         public void CopyFrom(ClimateCell other)
         {
@@ -33,6 +30,14 @@ namespace GreenhouseSimulator.Core.Models.Environment
             AbsoluteHumidity += delta.DeltaAbsHumidity;
             Light += delta.DeltaLight;
             Ph += delta.DeltaPh;
+        }
+
+        public void EnforcePhysicalLimits(double minPh, double maxPh)
+        {
+            double maxAh = Psychrometrics.GetMaxAbsoluteHumidity(Temperature);
+            AbsoluteHumidity = Math.Clamp(AbsoluteHumidity, 0.0, maxAh);
+            Light = Math.Max(0.0, Light);
+            Ph = Math.Clamp(Ph, minPh, maxPh);
         }
     }
 }

@@ -174,6 +174,17 @@ namespace GreenhouseSimulator.Core.Models.Environment
             (_currentCells, _nextCells) = (_nextCells, _currentCells);
         }
 
+        private void EnforceLimits()
+        {
+            for (int i = 0; i < WidthCells; i++)
+            {
+                for (int j = 0; j < LengthCells; j++)
+                {
+                    _currentCells[i, j].EnforcePhysicalLimits(_config.MinPh, _config.MaxPh);
+                }
+            }
+        }
+
         public void StepPhysics(double hourOfDay)
         {
             double dt = _config.HoursPerTick / _config.SubstepsPerHour;
@@ -183,6 +194,8 @@ namespace GreenhouseSimulator.Core.Models.Environment
                 outsideTemp = GetOutsideTemperature(hourOfDay + i * dt);
                 ApplyWallHeatLoss(outsideTemp, dt);
                 ApplyDiffusion(dt);
+
+                EnforceLimits();
             }
         }
 
@@ -206,7 +219,10 @@ namespace GreenhouseSimulator.Core.Models.Environment
             for (int i = 0; i < WidthCells; i++)
             {
                 for (int j = 0; j < LengthCells; j++)
+                {
                     _currentCells[i, j].ApplyDelta(delta);
+                    _currentCells[i, j].EnforcePhysicalLimits(_config.MinPh, _config.MaxPh);
+                }
             }
         }
 
