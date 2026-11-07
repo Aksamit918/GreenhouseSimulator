@@ -1,3 +1,4 @@
+using GreenhouseSimulator.Core.Config;
 using GreenhouseSimulator.Core.Controllers;
 using GreenhouseSimulator.Core.Models;
 using GreenhouseSimulator.Core.Models.Actuators;
@@ -8,15 +9,13 @@ namespace GreenhouseSimulator.Core.Services
 {
     public static class GreenhouseFactory
     {
-        public const double DefaultWidth = 10.0;
-        public const double DefaultLength = 6.0;
-
         public static (Greenhouse greenhouse, GreenhouseController controller) Create(string plansDirectory)
         {
             if (string.IsNullOrWhiteSpace(plansDirectory))
                 throw new ArgumentException("Plans directory cannot be empty.", nameof(plansDirectory));
 
-            var greenhouse = new Greenhouse(DefaultWidth, DefaultLength);
+            var config = new SimulationConfig();
+            var greenhouse = new Greenhouse(config);
 
             greenhouse.AddSensor(new ActiveSensor("temp-air", SensorType.Temperature, (2.0, 1.0)));
             greenhouse.AddSensor(new ActiveSensor("humidity-air", SensorType.Humidity, (2.0, 5.0)));

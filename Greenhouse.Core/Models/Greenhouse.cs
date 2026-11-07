@@ -1,4 +1,6 @@
-﻿using GreenhouseSimulator.Core.Models.Actuators;
+﻿using GreenhouseSimulator.Core.Config;
+using GreenhouseSimulator.Core.Models.Environment;
+using GreenhouseSimulator.Core.Models.Actuators;
 using GreenhouseSimulator.Core.Models.Plans;
 using GreenhouseSimulator.Core.Models.Sensors;
 using System;
@@ -8,43 +10,32 @@ namespace GreenhouseSimulator.Core.Models
 {
     public class Greenhouse
     {
-        private const double DefaultAmbientTemperature = 20.0;
-        private const double DefaultAmbientHumidity = 60.0;
-        private const double DefaultWaterPh = 6.0;
-
-        private const double TemperatureNoiseAmplitude = 0.6;
-        private const double HumidityNoiseAmplitude = 2.5;
-        private const double PhNoiseAmplitude = 0.08;
-        private const double CorridorPaddingFraction = 0.1;
-
-        private const double MinHumidity = 0.0;
-        private const double MaxHumidity = 100.0;
-        private const double MinPh = 0.0;
-        private const double MaxPh = 14.0;
+        public SimulationConfig Config { get; }
+        public EnvironmentGrid Grid { get; }
 
         public double Width { get; }
         public double Length { get; }
-        public double CurrentTemperature { get; private set; }
-        public double CurrentHumidity { get; private set; }
-        public double CurrentPh { get; private set; }
+        public double CurrentTemperature => Grid.GetAverageTemperature();
+        public double CurrentHumidity => Grid.GetAverageHumidity();
+        public double CurrentPh => Grid.GetAveragePh();
+        public double CurrentLight => Grid.GetAverageLight();
 
         private readonly List<Sensor> _sensors;
         private readonly List<IActuator> _actuators;
 
-        public Greenhouse(double width, double length)
+        public Greenhouse(SimulationConfig config)
         {
-            if (width <= 0 || length <= 0)
-                throw new ArgumentOutOfRangeException("Width and length must be positive.");
+            ArgumentNullException.ThrowIfNull(config);
+            if (config.Width <= 0 || config.Length <= 0)
+                throw new ArgumentOutOfRangeException(nameof(config), "Width and length must be positive.");
 
-            Width = width;
-            Length = length;
+            Config = config;
+            Width = config.Width;
+            Length = config.Length;
+            Grid = new EnvironmentGrid(config);
 
             _sensors = new List<Sensor>();
             _actuators = new List<IActuator>();
-
-            CurrentTemperature = DefaultAmbientTemperature;
-            CurrentHumidity = DefaultAmbientHumidity;
-            CurrentPh = DefaultWaterPh;
         }
 
         public void AddSensor(Sensor sensor)
@@ -108,77 +99,38 @@ namespace GreenhouseSimulator.Core.Models
         {
             ArgumentNullException.ThrowIfNull(phase);
 
-            ApplyNoise(phase, hourOfDay);
+            Grid.StepPhysics(hourOfDay);
             ApplyActuatorEffects();
-            ClampToPhysicalLimits();
             UpdateSensors();
-        }
-
-        private void ApplyNoise(PlanPhase phase, int hourOfDay)
-        {
-            CurrentTemperature = NextValue(
-                CurrentTemperature,
-                phase.GetTempCorridor(hourOfDay),
-                TemperatureNoiseAmplitude,
-                HasActuator<Heater>() && HasActuator<AirConditioner>());
-            CurrentHumidity = NextValue(
-                CurrentHumidity,
-                phase.HumidityCorridor,
-                HumidityNoiseAmplitude,
-                HasActuator<Humidifier>() && HasActuator<Heater>());
-            CurrentPh = NextValue(
-                CurrentPh,
-                phase.PhCorridor,
-                PhNoiseAmplitude,
-                HasActuator<FertilizerDoser>());
-        }
-
-        private static double NextValue(double value, ParameterCorridor corridor, double amplitude, bool regulated)
-        {
-            double next = value + RandomNoise(amplitude);
-            if (!regulated)
-                return next;
-
-            double width = corridor.MaxValue - corridor.MinValue;
-            double padding = CorridorPaddingFraction * width;
-            return Math.Clamp(next, corridor.MinValue - padding, corridor.MaxValue + padding);
-        }
-
-        private static double RandomNoise(double amplitude)
-        {
-            return amplitude * (Random.Shared.NextDouble() * 2.0 - 1.0);
         }
 
         private void ApplyActuatorEffects()
         {
+            ClimateDelta delta = ClimateDelta.Zero;
+
             foreach (var actuator in _actuators)
             {
                 switch (actuator)
                 {
                     case Heater heater:
-                        CurrentTemperature += heater.TemperatureDelta;
-                        CurrentHumidity += heater.HumidityDelta;
+                        delta += new ClimateDelta(heater.TemperatureDelta, 0.0, 0.0, 0.0);
                         break;
 
                     case AirConditioner conditioner:
-                        CurrentTemperature += conditioner.TemperatureDelta;
+                        delta += new ClimateDelta(conditioner.TemperatureDelta, 0.0, 0.0, 0.0);
                         break;
 
                     case Humidifier humidifier:
-                        CurrentHumidity += humidifier.HumidityDelta;
+                        delta += new ClimateDelta(0.0, humidifier.HumidityDelta, 0.0, 0.0);
                         break;
 
                     case FertilizerDoser doser:
-                        CurrentPh += doser.PhDelta;
+                        delta += new ClimateDelta(0.0, 0.0, 0.0, doser.PhDelta);
                         break;
                 }
             }
-        }
 
-        private void ClampToPhysicalLimits()
-        {
-            CurrentHumidity = Math.Clamp(CurrentHumidity, MinHumidity, MaxHumidity);
-            CurrentPh = Math.Clamp(CurrentPh, MinPh, MaxPh);
+            Grid.ApplyGlobalDelta(delta);
         }
 
         private void UpdateSensors()
@@ -188,15 +140,15 @@ namespace GreenhouseSimulator.Core.Models
                 switch (sensor.Type)
                 {
                     case SensorType.Temperature:
-                        sensor.UpdateMeasurement(CurrentTemperature);
+                        sensor.UpdateMeasurement(Grid.GetTemperatureAt(sensor.Location));
                         break;
 
                     case SensorType.Humidity:
-                        sensor.UpdateMeasurement(CurrentHumidity);
+                        sensor.UpdateMeasurement(Grid.GetHumidityAt(sensor.Location));
                         break;
 
                     case SensorType.Ph:
-                        sensor.UpdateMeasurement(CurrentPh);
+                        sensor.UpdateMeasurement(Grid.GetPhAt(sensor.Location));
                         break;
                 }
             }

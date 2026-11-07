@@ -180,10 +180,39 @@ namespace GreenhouseSimulator.Core.Models.Environment
             double outsideTemp = 0.0;
             for (int i = 0; i < _config.SubstepsPerHour; i++)
             {
-                outsideTemp = GetOutsideTemperature(hourOfDay);
+                outsideTemp = GetOutsideTemperature(hourOfDay + i * dt);
                 ApplyWallHeatLoss(outsideTemp, dt);
                 ApplyDiffusion(dt);
             }
         }
+
+        private double GetAverageValue(Func<ClimateCell, double> selector)
+        {
+            double sum = 0.0;
+
+            for (int i = 0; i < WidthCells; i++)
+            {
+                for (int j = 0; j < LengthCells; j++)
+                {
+                    sum += selector(_currentCells[i, j]);
+                }
+            }
+
+            return sum / (WidthCells * LengthCells);
+        }
+
+        public void ApplyGlobalDelta(ClimateDelta delta)
+        {
+            for (int i = 0; i < WidthCells; i++)
+            {
+                for (int j = 0; j < LengthCells; j++)
+                    _currentCells[i, j].ApplyDelta(delta);
+            }
+        }
+
+        public double GetAverageTemperature() => GetAverageValue(cell => cell.Temperature);
+        public double GetAverageHumidity() => GetAverageValue(cell => cell.RelativeHumidity);
+        public double GetAveragePh() => GetAverageValue(cell => cell.Ph);
+        public double GetAverageLight() => GetAverageValue(cell => cell.Light);
     }
 }
