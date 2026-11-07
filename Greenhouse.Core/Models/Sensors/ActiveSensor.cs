@@ -10,6 +10,9 @@ namespace GreenhouseSimulator.Core.Models.Sensors
         private double _toleranceBelow;
         private double _toleranceAbove;
 
+        public double Hysteresis { get; set; } = 0.2;
+        public bool IsInAlertState { get; private set; }
+
         public event EventHandler<ThresholdExceededEventArgs> OnThresholdExceeded;
 
         public ActiveSensor(string id, SensorType type, (double X, double Y) location)
@@ -39,17 +42,28 @@ namespace GreenhouseSimulator.Core.Models.Sensors
             CurrentValue = newValue;
 
             double signedDeviation = newValue - _targetValue;
-            bool exceeded = signedDeviation < -_toleranceBelow || signedDeviation > _toleranceAbove;
 
-            if (exceeded)
+            if (!IsInAlertState)
             {
-                double deviation = Math.Abs(signedDeviation);
+                IsInAlertState = signedDeviation < -_toleranceBelow || signedDeviation > _toleranceAbove;
+            }
+            else
+            {
+                double exitBelow = Math.Max(0.0, _toleranceBelow - Hysteresis);
+                double exitAbove = Math.Max(0.0, _toleranceAbove - Hysteresis);
+                if (signedDeviation >= -exitBelow && signedDeviation <= exitAbove)
+                    IsInAlertState = false;
+            }
+
+            if (IsInAlertState)
+            {
                 var args = new ThresholdExceededEventArgs
                 {
                     SensorId = Id,
+                    Location = Location,
                     CurrentValue = newValue,
                     TargetValue = _targetValue,
-                    Deviation = deviation
+                    Deviation = Math.Abs(signedDeviation)
                 };
 
                 OnThresholdExceeded?.Invoke(this, args);

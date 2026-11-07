@@ -9,13 +9,15 @@ namespace GreenhouseSimulator.Core.Models.Sensors
         public SensorType Type { get; }
         public (double X, double Y) Location { get; private set; }
         public double CurrentValue { get; protected set; }
+        public double SensorNoiseSigma { get; set; } = 0.05;
 
-        public Sensor(string id, SensorType type, (double X, double Y) location)
+        public Sensor(string id, SensorType type, (double X, double Y) location, double sensorNoiseSigma = 0.05)
         {
             Id = id;
             Type = type;
             Location = location;
             CurrentValue = 0.0;
+            SensorNoiseSigma = sensorNoiseSigma;
         }
 
         public void MoveTo((double X, double Y) location)

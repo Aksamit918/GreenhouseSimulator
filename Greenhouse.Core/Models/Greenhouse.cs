@@ -3,6 +3,7 @@ using GreenhouseSimulator.Core.Models.Environment;
 using GreenhouseSimulator.Core.Models.Actuators;
 using GreenhouseSimulator.Core.Models.Plans;
 using GreenhouseSimulator.Core.Models.Sensors;
+using GreenhouseSimulator.Core.Services;
 using System;
 using System.Collections.Generic;
 
@@ -22,6 +23,7 @@ namespace GreenhouseSimulator.Core.Models
 
         private readonly List<Sensor> _sensors;
         private readonly List<Actuator> _actuators;
+        private readonly IRandomProvider _randomProvider;
 
         public Greenhouse(SimulationConfig config)
         {
@@ -36,6 +38,7 @@ namespace GreenhouseSimulator.Core.Models
 
             _sensors = new List<Sensor>();
             _actuators = new List<Actuator>();
+            _randomProvider = new RandomProvider(config);
         }
 
         public void AddSensor(Sensor sensor)
@@ -107,18 +110,26 @@ namespace GreenhouseSimulator.Core.Models
         {
             foreach (var sensor in _sensors)
             {
+                double noise = sensor.SensorNoiseSigma > 0.0
+                    ? _randomProvider.GetNextGaussian(0.0, sensor.SensorNoiseSigma)
+                    : 0.0;
+
                 switch (sensor.Type)
                 {
                     case SensorType.Temperature:
-                        sensor.UpdateMeasurement(Grid.GetTemperatureAt(sensor.Location));
+                        sensor.UpdateMeasurement(Grid.GetTemperatureAt(sensor.Location) + noise);
                         break;
 
                     case SensorType.Humidity:
-                        sensor.UpdateMeasurement(Grid.GetHumidityAt(sensor.Location));
+                        sensor.UpdateMeasurement(Grid.GetHumidityAt(sensor.Location) + noise);
                         break;
 
                     case SensorType.Ph:
-                        sensor.UpdateMeasurement(Grid.GetPhAt(sensor.Location));
+                        sensor.UpdateMeasurement(Grid.GetPhAt(sensor.Location) + noise);
+                        break;
+
+                    case SensorType.Light:
+                        sensor.UpdateMeasurement(Grid.GetLightAt(sensor.Location) + noise);
                         break;
                 }
             }
