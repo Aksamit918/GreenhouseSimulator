@@ -1,23 +1,26 @@
-﻿namespace GreenhouseSimulator.Core.Models.Actuators
+﻿using GreenhouseSimulator.Core.Models.Environment;
+
+namespace GreenhouseSimulator.Core.Models.Actuators
 {
-    public class LightingSystem : IActuator
+    public class LightingSystem : Actuator
     {
-        public bool IsOn { get; private set; }
-        public (double X, double Y) Location { get; private set; }
+        public double Efficiency { get; set; } = 0.8;
+        public double HeatConversionFactor { get; set; } = 0.025;
 
         public LightingSystem((double X, double Y) location)
+            : base(location, maxPower: 100.0, effectiveRadius: 3.0, powerConsumptionKw: 0.4)
         {
-            Location = location;
-            IsOn = false;
         }
 
-        public void MoveTo((double X, double Y) location)
+        public override ClimateDelta GetImpactAt((double X, double Y) point, double dt, bool useGaussian = true)
         {
-            Location = location;
+            if (CurrentPowerRatio <= 0.0)
+                return ClimateDelta.Zero;
+
+            double attenuation = GetAttenuation(point, useGaussian);
+            double lightEffect = MaxPower * CurrentPowerRatio * Efficiency * attenuation;
+            double heatEffect = MaxPower * CurrentPowerRatio * (1.0 - Efficiency) * HeatConversionFactor * attenuation * dt;
+            return new ClimateDelta(heatEffect, 0.0, lightEffect, 0.0);
         }
-
-        public void TurnOn() => IsOn = true;
-
-        public void TurnOff() => IsOn = false;
     }
 }

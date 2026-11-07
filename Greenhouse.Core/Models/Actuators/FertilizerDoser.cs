@@ -1,28 +1,30 @@
-﻿namespace GreenhouseSimulator.Core.Models.Actuators
+﻿using GreenhouseSimulator.Core.Models.Environment;
+
+namespace GreenhouseSimulator.Core.Models.Actuators
 {
-    public class FertilizerDoser : IActuator
+    public class FertilizerDoser : Actuator
     {
-        private readonly double _pHRate;
+        public double TotalReagentConsumedMl { get; private set; }
+        public double InjectionRateMlPerHour { get; set; } = 50.0;
 
-        public bool IsOn { get; private set; }
-        public (double X, double Y) Location { get; private set; }
-
-        public double PhDelta => IsOn ? _pHRate : 0.0;
-
-        public FertilizerDoser((double X, double Y) location, double pHRate = 0.35)
+        public FertilizerDoser((double X, double Y) location)
+            : base(location, maxPower: 0.6, effectiveRadius: 2.0, powerConsumptionKw: 0.05)
         {
-            Location = location;
-            _pHRate = pHRate;
-            IsOn = false;
         }
 
-        public void MoveTo((double X, double Y) location)
+        public override void UpdateInertia(double dt)
         {
-            Location = location;
+            base.UpdateInertia(dt);
+            TotalReagentConsumedMl += InjectionRateMlPerHour * CurrentPowerRatio * dt;
         }
 
-        public void TurnOn() => IsOn = true;
+        public override ClimateDelta GetImpactAt((double X, double Y) point, double dt, bool useGaussian = true)
+        {
+            if (CurrentPowerRatio <= 0.0)
+                return ClimateDelta.Zero;
 
-        public void TurnOff() => IsOn = false;
+            double effect = MaxPower * CurrentPowerRatio * GetAttenuation(point, useGaussian) * dt;
+            return new ClimateDelta(0.0, 0.0, 0.0, effect);
+        }
     }
 }

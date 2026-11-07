@@ -1,28 +1,23 @@
-﻿namespace GreenhouseSimulator.Core.Models.Actuators
+﻿using GreenhouseSimulator.Core.Models.Environment;
+
+namespace GreenhouseSimulator.Core.Models.Actuators
 {
-    public class AirConditioner : IActuator
+    public class AirConditioner : Actuator
     {
-        private readonly double _temperatureRate;
+        public double DehumidificationFactor { get; set; } = 0.6;
 
-        public bool IsOn { get; private set; }
-        public (double X, double Y) Location { get; private set; }
-
-        public double TemperatureDelta => IsOn ? _temperatureRate : 0.0;
-
-        public AirConditioner((double X, double Y) location, double temperatureRate = -1.5)
+        public AirConditioner((double X, double Y) location)
+            : base(location, maxPower: 4.0, effectiveRadius: 3.5, powerConsumptionKw: 2.5)
         {
-            Location = location;
-            _temperatureRate = temperatureRate;
-            IsOn = false;
         }
 
-        public void MoveTo((double X, double Y) location)
+        public override ClimateDelta GetImpactAt((double X, double Y) point, double dt, bool useGaussian = true)
         {
-            Location = location;
+            if (CurrentPowerRatio <= 0.0)
+                return ClimateDelta.Zero;
+
+            double effect = MaxPower * CurrentPowerRatio * GetAttenuation(point, useGaussian) * dt;
+            return new ClimateDelta(-effect, -effect * DehumidificationFactor, 0.0, 0.0);
         }
-
-        public void TurnOn() => IsOn = true;
-
-        public void TurnOff() => IsOn = false;
     }
 }

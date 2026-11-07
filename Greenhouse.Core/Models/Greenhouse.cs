@@ -21,7 +21,7 @@ namespace GreenhouseSimulator.Core.Models
         public double CurrentLight => Grid.GetAverageLight();
 
         private readonly List<Sensor> _sensors;
-        private readonly List<IActuator> _actuators;
+        private readonly List<Actuator> _actuators;
 
         public Greenhouse(SimulationConfig config)
         {
@@ -35,7 +35,7 @@ namespace GreenhouseSimulator.Core.Models
             Grid = new EnvironmentGrid(config);
 
             _sensors = new List<Sensor>();
-            _actuators = new List<IActuator>();
+            _actuators = new List<Actuator>();
         }
 
         public void AddSensor(Sensor sensor)
@@ -52,19 +52,19 @@ namespace GreenhouseSimulator.Core.Models
 
         public List<Sensor> GetAllSensors() => new List<Sensor>(_sensors);
 
-        public void AddActuator(IActuator actuator)
+        public void AddActuator(Actuator actuator)
         {
             ArgumentNullException.ThrowIfNull(actuator);
             _actuators.Add(actuator);
         }
 
-        public void RemoveActuator(IActuator actuator)
+        public void RemoveActuator(Actuator actuator)
         {
             ArgumentNullException.ThrowIfNull(actuator);
             _actuators.Remove(actuator);
         }
 
-        public List<IActuator> GetAllActuators() => new List<IActuator>(_actuators);
+        public List<Actuator> GetAllActuators() => new List<Actuator>(_actuators);
 
         public string? DescribeMissingRegulators()
         {
@@ -86,7 +86,7 @@ namespace GreenhouseSimulator.Core.Models
 
         private bool HasActuator<TActuator>() where TActuator : class
         {
-            foreach (IActuator actuator in _actuators)
+            foreach (Actuator actuator in _actuators)
             {
                 if (actuator is TActuator)
                     return true;
@@ -99,39 +99,8 @@ namespace GreenhouseSimulator.Core.Models
         {
             ArgumentNullException.ThrowIfNull(phase);
 
-            Grid.StepPhysics(hourOfDay);
-            ApplyActuatorEffects();
+            Grid.StepPhysics(hourOfDay, _actuators);
             UpdateSensors();
-        }
-
-        private void ApplyActuatorEffects()
-        {
-            ClimateDelta delta = ClimateDelta.Zero;
-
-            foreach (var actuator in _actuators)
-            {
-                switch (actuator)
-                {
-                    case Heater heater:
-                        delta += new ClimateDelta(heater.TemperatureDelta, 0.0, 0.0, 0.0);
-                        break;
-
-                    case AirConditioner conditioner:
-                        delta += new ClimateDelta(conditioner.TemperatureDelta, 0.0, 0.0, 0.0);
-                        break;
-
-                    case Humidifier humidifier:
-                        delta += new ClimateDelta(0.0, humidifier.HumidityDelta, 0.0, 0.0);
-                        break;
-
-                    case FertilizerDoser doser:
-                        delta += new ClimateDelta(0.0, 0.0, 0.0, doser.PhDelta);
-                        doser.RecordConsumption(Config.DefaultDoserMlPerHour * Config.HoursPerTick);
-                        break;
-                }
-            }
-
-            Grid.ApplyGlobalDelta(delta);
         }
 
         private void UpdateSensors()

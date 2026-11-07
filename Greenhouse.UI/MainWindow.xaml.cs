@@ -19,7 +19,7 @@ namespace Greenhouse.UI
         private GreenhouseController _controller;
         private DispatcherTimer _timer;
         private List<string> _currentAlerts = new List<string>();
-        private Dictionary<IActuator, bool> _actuatorStates = new Dictionary<IActuator, bool>();
+        private Dictionary<Actuator, bool> _actuatorStates = new Dictionary<Actuator, bool>();
         private string? _climateRegime;
         private bool _editingExistingPlan;
 
@@ -348,7 +348,7 @@ namespace Greenhouse.UI
             string timeStamp = $"[День {day}, {hour}:00]";
             LogClimateRegime(timeStamp, day, hour);
             var gh = _controller.Greenhouse;
-            List<IActuator> actuators = gh.GetAllActuators();
+            List<Actuator> actuators = gh.GetAllActuators();
             string temperature = $"{gh.CurrentTemperature:F1}°C";
             string humidity = $"{gh.CurrentHumidity:F1}%";
             string ph = $"pH {gh.CurrentPh:F2}";
@@ -406,14 +406,14 @@ namespace Greenhouse.UI
                 schemeEdited);
 
             _actuatorStates.Clear();
-            foreach (IActuator actuator in actuators)
+            foreach (Actuator actuator in actuators)
                 _actuatorStates[actuator] = actuator.IsOn;
         }
 
         private void LogRegulatorGroup(
             string timeStamp,
-            IReadOnlyList<IActuator> actuators,
-            Func<IActuator, bool> match,
+            IReadOnlyList<Actuator> actuators,
+            Func<Actuator, bool> match,
             Func<int, string> turnedOn,
             string turnedOff,
             Func<int, string> removedWhileWorking,
@@ -423,7 +423,7 @@ namespace Greenhouse.UI
         {
             int previousTotal = 0;
             int previousOn = 0;
-            foreach (KeyValuePair<IActuator, bool> pair in _actuatorStates)
+            foreach (KeyValuePair<Actuator, bool> pair in _actuatorStates)
             {
                 if (!match(pair.Key))
                     continue;
@@ -435,7 +435,7 @@ namespace Greenhouse.UI
 
             int currentTotal = 0;
             int currentOn = 0;
-            foreach (IActuator actuator in actuators)
+            foreach (Actuator actuator in actuators)
             {
                 if (!match(actuator))
                     continue;
@@ -613,7 +613,7 @@ namespace Greenhouse.UI
             GreenhouseCanvas.Children.Add(g);
         }
 
-        private void DrawActuator(IActuator actuator, double x, double y)
+        private void DrawActuator(Actuator actuator, double x, double y)
         {
             FrameworkElement visual = null;
             bool on = actuator.IsOn;

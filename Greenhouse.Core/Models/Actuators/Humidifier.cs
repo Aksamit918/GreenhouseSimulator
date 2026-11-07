@@ -1,28 +1,31 @@
-﻿namespace GreenhouseSimulator.Core.Models.Actuators
+﻿using GreenhouseSimulator.Core.Models.Environment;
+
+namespace GreenhouseSimulator.Core.Models.Actuators
 {
-    public class Humidifier : IActuator
+    public class Humidifier : Actuator
     {
-        private readonly double _humidityRate;
+        public double TotalWaterConsumedLiters { get; private set; }
+        public double WaterFlowLitersPerHour { get; set; } = 2.0;
+        public double AdiabaticCoolingFactor { get; set; } = 0.08;
 
-        public bool IsOn { get; private set; }
-        public (double X, double Y) Location { get; private set; }
-
-        public double HumidityDelta => IsOn ? _humidityRate : 0.0;
-
-        public Humidifier((double X, double Y) location, double humidityRate = 6.0)
+        public Humidifier((double X, double Y) location)
+            : base(location, maxPower: 5.0, effectiveRadius: 3.5, powerConsumptionKw: 0.3)
         {
-            Location = location;
-            _humidityRate = humidityRate;
-            IsOn = false;
         }
 
-        public void MoveTo((double X, double Y) location)
+        public override void UpdateInertia(double dt)
         {
-            Location = location;
+            base.UpdateInertia(dt);
+            TotalWaterConsumedLiters += WaterFlowLitersPerHour * CurrentPowerRatio * dt;
         }
 
-        public void TurnOn() => IsOn = true;
+        public override ClimateDelta GetImpactAt((double X, double Y) point, double dt, bool useGaussian = true)
+        {
+            if (CurrentPowerRatio <= 0.0)
+                return ClimateDelta.Zero;
 
-        public void TurnOff() => IsOn = false;
+            double effect = MaxPower * CurrentPowerRatio * GetAttenuation(point, useGaussian) * dt;
+            return new ClimateDelta(-effect * AdiabaticCoolingFactor, effect, 0.0, 0.0);
+        }
     }
 }

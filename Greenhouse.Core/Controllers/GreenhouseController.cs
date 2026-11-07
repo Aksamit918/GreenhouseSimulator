@@ -266,7 +266,7 @@ namespace GreenhouseSimulator.Core.Controllers
             }
         }
 
-        private static void SetPower(IActuator actuator, bool on)
+        private static void SetPower(Actuator actuator, bool on)
         {
             if (on)
             {

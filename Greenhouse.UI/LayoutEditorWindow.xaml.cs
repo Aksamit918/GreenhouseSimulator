@@ -135,7 +135,7 @@ namespace Greenhouse.UI
             foreach (Sensor sensor in _greenhouse.GetAllSensors())
                 PlaceModel(sensor, sensor.Location);
 
-            foreach (IActuator actuator in _greenhouse.GetAllActuators())
+            foreach (Actuator actuator in _greenhouse.GetAllActuators())
                 PlaceModel(actuator, actuator.Location);
         }
 
@@ -194,7 +194,7 @@ namespace Greenhouse.UI
         private void ApplyLayout()
         {
             var keptSensors = new HashSet<Sensor>();
-            var keptActuators = new HashSet<IActuator>();
+            var keptActuators = new HashSet<Actuator>();
 
             foreach (object child in EditorCanvas.Children)
             {
@@ -208,7 +208,7 @@ namespace Greenhouse.UI
                         sensor.MoveTo(location);
                         keptSensors.Add(sensor);
                         break;
-                    case IActuator actuator:
+                    case Actuator actuator:
                         actuator.MoveTo(location);
                         keptActuators.Add(actuator);
                         break;
@@ -224,7 +224,7 @@ namespace Greenhouse.UI
                     _greenhouse.RemoveSensor(sensor);
             }
 
-            foreach (IActuator actuator in _greenhouse.GetAllActuators())
+            foreach (Actuator actuator in _greenhouse.GetAllActuators())
             {
                 if (!keptActuators.Contains(actuator))
                     _greenhouse.RemoveActuator(actuator);
@@ -247,14 +247,14 @@ namespace Greenhouse.UI
                 Math.Clamp(y, 0, _greenhouse.Length));
         }
 
-        private static void Remember(object? device, HashSet<Sensor> sensors, HashSet<IActuator> actuators)
+        private static void Remember(object? device, HashSet<Sensor> sensors, HashSet<Actuator> actuators)
         {
             switch (device)
             {
                 case Sensor sensor:
                     sensors.Add(sensor);
                     break;
-                case IActuator actuator:
+                case Actuator actuator:
                     actuators.Add(actuator);
                     break;
             }

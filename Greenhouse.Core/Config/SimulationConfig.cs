@@ -30,6 +30,10 @@ namespace GreenhouseSimulator.Core.Config
         public double BaseTranspirationRate { get; set; } = 0.4;
         public double LightTranspirationFactor { get; set; } = 0.002;
         public double PhDriftRate { get; set; } = 0.03;
+        public double PhDiffusionCoeff { get; set; } = 0.5;
+        public double SolutionFlowSpeed { get; set; } = 0.4;
+        public double DefaultDoserMlPerHour { get; set; } = 50.0;
+        public bool UseGaussianAttenuation { get; set; } = true;
 
         public void SaveToFile(string filePath)
         {
