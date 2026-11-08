@@ -20,14 +20,14 @@ namespace GreenhouseSimulator.Core.Controllers
     public class GreenhouseController
     {
         public event Action<string, double>? AlertTriggered;
-
         private readonly Greenhouse _greenhouse;
         private readonly IPlanRepository _repository;
+        private Dictionary<Actuator, PidController> _regulators = new();
         private readonly HashSet<ActiveSensor> _boundSensors = new();
         private GrowingPlan? _activePlan;
         private bool _isRunning;
         private bool _isPaused;
-        private bool _doserLatched;
+        private double? _previousTemperatureTarget;
 
         public Greenhouse Greenhouse => _greenhouse;
         public GrowingPlan? ActivePlan => _activePlan;
@@ -62,7 +62,9 @@ namespace GreenhouseSimulator.Core.Controllers
             plan.EnsureValid();
 
             if (_repository.Contains(plan.CropName))
+            {
                 throw new InvalidOperationException($"A growing plan for '{plan.CropName}' already exists.");
+            }
 
             _repository.SavePlan(plan);
         }
@@ -73,7 +75,9 @@ namespace GreenhouseSimulator.Core.Controllers
             plan.EnsureValid();
 
             if (!_repository.Contains(plan.CropName))
+            {
                 throw new InvalidOperationException($"A growing plan for '{plan.CropName}' does not exist.");
+            }
 
             _repository.SavePlan(plan);
 
@@ -97,7 +101,6 @@ namespace GreenhouseSimulator.Core.Controllers
             ElapsedHours = 0;
             _isRunning = true;
             _isPaused = false;
-            _doserLatched = false;
             LastResult = SimulationResult.None;
             FailureMessage = null;
 
@@ -109,16 +112,19 @@ namespace GreenhouseSimulator.Core.Controllers
         public void StopCycle()
         {
             if (_isRunning && LastResult == SimulationResult.None)
+            {
                 LastResult = SimulationResult.Stopped;
+            }
 
             _isRunning = false;
             _isPaused = false;
-            _doserLatched = false;
 
             foreach (var actuator in _greenhouse.GetAllActuators())
             {
                 actuator.TurnOff();
             }
+
+            ResetRegulators();
         }
 
         public SimulationResult TakeResult(out string? failureMessage)
@@ -133,7 +139,9 @@ namespace GreenhouseSimulator.Core.Controllers
         public void Pause()
         {
             if (!_isRunning)
+            {
                 throw new InvalidOperationException("Cannot pause a cycle that is not running.");
+            }
 
             _isPaused = true;
         }
@@ -141,7 +149,9 @@ namespace GreenhouseSimulator.Core.Controllers
         public void Resume()
         {
             if (!_isRunning)
+            {
                 throw new InvalidOperationException("Cannot resume a cycle that is not running.");
+            }
 
             _isPaused = false;
         }
@@ -187,51 +197,79 @@ namespace GreenhouseSimulator.Core.Controllers
             }
         }
 
+        private void AssignZonalPower(Actuator actuator, SensorType sensorType, Func<ActiveSensor, double> errorOf)
+        {
+            double minWeight = _greenhouse.Config.MinActuatorWeight;
+            bool useGaussian = _greenhouse.Config.UseGaussianAttenuation;
+
+            double? worstError = null;
+            foreach (ActiveSensor sensor in _greenhouse.GetAllSensors().OfType<ActiveSensor>())
+            {
+                if (sensor.Type != sensorType)
+                {
+                    continue;
+                }
+
+                if (actuator.GetAttenuation(sensor.Location, useGaussian) <= minWeight)
+                {
+                    continue;
+                }
+
+                double error = errorOf(sensor);
+                if (worstError == null || error > worstError)
+                {
+                    worstError = error;
+                }
+            }
+
+            if (worstError == null)
+            {
+                actuator.SetTargetPower(0.0);
+                return;
+            }
+
+            if (!_regulators.TryGetValue(actuator, out PidController? regulator))
+            {
+                regulator = new PidController(_greenhouse.Config);
+                _regulators[actuator] = regulator;
+            }
+
+            actuator.SetTargetPower(regulator.Compute(worstError.Value, _greenhouse.Config.HoursPerTick));
+        }
+
+        private void ResetRegulators()
+        {
+            foreach (PidController regulator in _regulators.Values)
+            { 
+                regulator.Reset(); 
+            }
+        }
+
         private void RegulateEnvironment(PlanPhase phase)
         {
             ParameterCorridor tempCorridor = phase.GetTempCorridor(HourOfDay);
-            bool tooCold = _greenhouse.CurrentTemperature < tempCorridor.MinValue;
-            bool tooHot = _greenhouse.CurrentTemperature > tempCorridor.MaxValue;
-            bool tooDry = _greenhouse.CurrentHumidity < phase.HumidityCorridor.MinValue;
-            bool tooHumid = _greenhouse.CurrentHumidity > phase.HumidityCorridor.MaxValue;
-            bool phLow = _greenhouse.CurrentPh < phase.PhCorridor.MinValue;
-            bool phHigh = _greenhouse.CurrentPh > phase.PhCorridor.MaxValue;
-            bool phAtTarget = _greenhouse.CurrentPh >= phase.PhCorridor.TargetValue;
-            bool lightsOn = HourOfDay < phase.LightDurationHours;
-
-            if (phLow)
-                _doserLatched = true;
-            else if (phHigh || phAtTarget)
-                _doserLatched = false;
-
-            bool heaterOn = tooCold;
-            bool acOn = tooHot;
-            bool humidifierOn = tooDry;
-
-            if (tooDry)
-                heaterOn = false;
-
-            if (tooHumid)
+            if (_previousTemperatureTarget != tempCorridor.TargetValue)
             {
-                humidifierOn = false;
-                if (!tooHot)
-                    heaterOn = true;
+                ResetRegulators();
+                _previousTemperatureTarget = tempCorridor.TargetValue;
             }
+
+            bool lightsOn = HourOfDay < phase.LightDurationHours;
 
             foreach (var actuator in _greenhouse.GetAllActuators())
             {
                 switch (actuator)
                 {
                     case Heater heater:
-                        SetPower(heater, heaterOn);
+                        AssignZonalPower(heater, SensorType.Temperature, sensor => tempCorridor.TargetValue - sensor.CurrentValue);
                         break;
 
                     case AirConditioner conditioner:
-                        SetPower(conditioner, acOn);
+                        AssignZonalPower(conditioner, SensorType.Temperature, sensor => sensor.CurrentValue - tempCorridor.TargetValue);
                         break;
 
                     case Humidifier humidifier:
-                        SetPower(humidifier, humidifierOn);
+                        AssignZonalPower(humidifier, SensorType.Humidity, sensor => phase.HumidityCorridor.TargetValue - sensor.CurrentValue);
                         break;
 
                     case LightingSystem lighting:
@@ -239,7 +277,7 @@ namespace GreenhouseSimulator.Core.Controllers
                         break;
 
                     case FertilizerDoser doser:
-                        SetPower(doser, _doserLatched);
+                        AssignZonalPower(doser, SensorType.Ph, sensor => phase.PhCorridor.TargetValue - sensor.CurrentValue);
                         break;
                 }
             }
@@ -286,7 +324,9 @@ namespace GreenhouseSimulator.Core.Controllers
         public void SyncRegulation()
         {
             if (!_isRunning || _activePlan == null)
+            {
                 return;
+            }
 
             PlanPhase phase = _activePlan.GetPhaseForDay(CurrentDay);
             ApplySensorThresholds(phase);
@@ -296,13 +336,17 @@ namespace GreenhouseSimulator.Core.Controllers
         private void SubscribeToActiveSensors()
         {
             foreach (var sensor in _greenhouse.GetAllSensors().OfType<ActiveSensor>())
+            {
                 BindSensor(sensor);
+            }
         }
 
         private void BindSensor(ActiveSensor sensor)
         {
             if (!_boundSensors.Add(sensor))
+            {
                 return;
+            }
 
             sensor.OnThresholdExceeded += (sender, args) =>
             {

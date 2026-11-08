@@ -37,6 +37,7 @@ namespace GreenhouseSimulator.Core.Config
         public double PidKp { get; set; } = 0.4;
         public double PidKi { get; set; } = 0.05;
         public double PidKd { get; set; } = 0.02;
+        public double MinActuatorWeight { get; set; } = Math.Exp(-0.5);
 
         public void SaveToFile(string filePath)
         {
@@ -47,7 +48,10 @@ namespace GreenhouseSimulator.Core.Config
 
         public static SimulationConfig LoadFromFile(string filePath)
         {
-            if (!File.Exists(filePath)) { return new SimulationConfig(); }
+            if (!File.Exists(filePath))
+            {
+                return new SimulationConfig();
+            }
 
             string json = File.ReadAllText(filePath);
 
