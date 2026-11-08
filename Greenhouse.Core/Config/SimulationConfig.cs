@@ -34,6 +34,9 @@ namespace GreenhouseSimulator.Core.Config
         public double SolutionFlowSpeed { get; set; } = 0.4;
         public double DefaultDoserMlPerHour { get; set; } = 50.0;
         public bool UseGaussianAttenuation { get; set; } = true;
+        public double PidKp { get; set; } = 0.4;
+        public double PidKi { get; set; } = 0.05;
+        public double PidKd { get; set; } = 0.02;
 
         public void SaveToFile(string filePath)
         {
