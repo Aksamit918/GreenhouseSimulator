@@ -12,7 +12,9 @@ namespace GreenhouseSimulator.Core.Services
         public static (Greenhouse greenhouse, GreenhouseController controller) Create(string plansDirectory)
         {
             if (string.IsNullOrWhiteSpace(plansDirectory))
+            {
                 throw new ArgumentException("Plans directory cannot be empty.", nameof(plansDirectory));
+            }
 
             var config = new SimulationConfig();
             var greenhouse = new Greenhouse(config);

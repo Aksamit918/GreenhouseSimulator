@@ -39,7 +39,10 @@ namespace Greenhouse.UI
                 _controller.AlertTriggered += OnAlertTriggered;
 
                 PlansComboBox.ItemsSource = _controller.ListPlans();
-                if (PlansComboBox.Items.Count > 0) PlansComboBox.SelectedIndex = 0;
+                if (PlansComboBox.Items.Count > 0)
+                {
+                    PlansComboBox.SelectedIndex = 0;
+                }
 
                 _timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
                 _timer.Tick += Timer_Tick;
@@ -54,7 +57,10 @@ namespace Greenhouse.UI
 
         private void BtnStart_Click(object sender, RoutedEventArgs e)
         {
-            if (PlansComboBox.SelectedItem == null) return;
+            if (PlansComboBox.SelectedItem == null)
+            {
+                return;
+            }
             try
             {
                 _controller.StartCycle(PlansComboBox.SelectedItem.ToString());
@@ -108,7 +114,9 @@ namespace Greenhouse.UI
                 _controller.BindNewSensors();
                 _controller.SyncRegulation();
                 if (_controller.IsRunning)
+                {
                     CheckActuatorChanges(schemeEdited: true);
+                }
                 UpdateUI();
             }
         }
@@ -195,9 +203,13 @@ namespace Greenhouse.UI
                 }
 
                 if (_editingExistingPlan)
+                {
                     _controller.UpdatePlan(plan);
+                }
                 else
+                {
                     _controller.AddPlan(plan);
+                }
 
                 PlansComboBox.ItemsSource = _controller.ListPlans();
                 PlansComboBox.SelectedItem = plan.CropName;
@@ -257,7 +269,10 @@ namespace Greenhouse.UI
 
         private void Timer_Tick(object sender, EventArgs e)
         {
-            if (_controller.IsPaused) return;
+            if (_controller.IsPaused)
+            {
+                return;
+            }
 
             if (!_controller.IsRunning)
             {
@@ -304,7 +319,9 @@ namespace Greenhouse.UI
         {
             SimulationResult result = _controller.TakeResult(out string? failureMessage);
             if (result == SimulationResult.None)
+            {
                 return;
+            }
 
             string crop = _controller.ActivePlan?.CropName ?? "план";
             int plannedDays = _controller.ActivePlan?.TotalDurationDays ?? 0;
@@ -341,7 +358,9 @@ namespace Greenhouse.UI
         {
             int elapsed = _controller.ElapsedHours;
             if (clockAdvanced && elapsed > 0)
+            {
                 elapsed--;
+            }
 
             int day = elapsed / 24 + 1;
             int hour = elapsed % 24;
@@ -407,7 +426,9 @@ namespace Greenhouse.UI
 
             _actuatorStates.Clear();
             foreach (Actuator actuator in actuators)
+            {
                 _actuatorStates[actuator] = actuator.IsOn;
+            }
         }
 
         private void LogRegulatorGroup(
@@ -426,11 +447,15 @@ namespace Greenhouse.UI
             foreach (KeyValuePair<Actuator, bool> pair in _actuatorStates)
             {
                 if (!match(pair.Key))
+                {
                     continue;
+                }
 
                 previousTotal++;
                 if (pair.Value)
+                {
                     previousOn++;
+                }
             }
 
             int currentTotal = 0;
@@ -438,30 +463,48 @@ namespace Greenhouse.UI
             foreach (Actuator actuator in actuators)
             {
                 if (!match(actuator))
+                {
                     continue;
+                }
 
                 currentTotal++;
                 if (actuator.IsOn)
+                {
                     currentOn++;
+                }
             }
 
             if (previousTotal == currentTotal && previousOn == currentOn)
+            {
                 return;
+            }
 
             string? line = null;
             if (currentOn > 0 && previousOn == 0)
+            {
                 line = turnedOn(currentOn);
+            }
             else if (currentOn == 0 && previousOn > 0 && currentTotal == 0)
+            {
                 line = removedWhileWorking(previousTotal);
+            }
             else if (currentOn == 0 && previousOn > 0)
+            {
                 line = turnedOff;
+            }
             else if (currentOn > 0 && previousOn > 0 && currentOn != previousOn)
+            {
                 line = resized(previousOn, currentOn);
+            }
             else if (previousTotal != currentTotal && (previousTotal > 0 || schemeEdited))
+            {
                 line = idleCountChanged(previousTotal, currentTotal);
+            }
 
             if (!string.IsNullOrEmpty(line))
+            {
                 TxtHistory.Text = $"{timeStamp} {line}\n\n" + TxtHistory.Text;
+            }
         }
 
         private void OnAlertTriggered(string sensorId, double badValue)
@@ -472,7 +515,9 @@ namespace Greenhouse.UI
         private void LogClimateRegime(string timeStamp, int day, int hour)
         {
             if (!TryDescribeClimate(day, hour, out string description) || _climateRegime == description)
+            {
                 return;
+            }
 
             _climateRegime = description;
             TxtHistory.Text = $"{timeStamp} {description}\n\n" + TxtHistory.Text;
@@ -487,10 +532,14 @@ namespace Greenhouse.UI
         {
             description = "";
             if (_controller.ActivePlan == null)
+            {
                 return false;
+            }
 
             if (day > _controller.ActivePlan.TotalDurationDays)
+            {
                 return false;
+            }
 
             PlanPhase phase = _controller.ActivePlan.GetPhaseForDay(day);
             ParameterCorridor corridor = phase.GetTempCorridor(hour);
@@ -508,7 +557,10 @@ namespace Greenhouse.UI
 
         private void UpdateUI()
         {
-            if (_controller == null || _controller.Greenhouse == null) return;
+            if (_controller == null || _controller.Greenhouse == null)
+            {
+                return;
+            }
 
             if (_controller.IsRunning)
             {
@@ -549,7 +601,10 @@ namespace Greenhouse.UI
 
             double cw = GreenhouseCanvas.ActualWidth;
             double ch = GreenhouseCanvas.ActualHeight;
-            if (cw == 0 || ch == 0) return;
+            if (cw == 0 || ch == 0)
+            {
+                return;
+            }
 
             var gh = _controller.Greenhouse;
             double scaleX = cw / gh.Width;
@@ -578,7 +633,9 @@ namespace Greenhouse.UI
         private DropShadowEffect GetShadow(bool isGlowing = false)
         {
             if (isGlowing)
+            {
                 return new DropShadowEffect { Color = Colors.Red, Direction = 0, ShadowDepth = 0, BlurRadius = 20, Opacity = 1.0 };
+            }
             return new DropShadowEffect { Color = Colors.Black, Direction = 315, ShadowDepth = 4, BlurRadius = 5, Opacity = 0.6 };
         }
 
@@ -659,7 +716,10 @@ namespace Greenhouse.UI
                 Canvas.SetLeft(visual, x - 15); Canvas.SetTop(visual, y - 20);
             }
 
-            if (visual != null) GreenhouseCanvas.Children.Add(visual);
+            if (visual != null)
+            {
+                GreenhouseCanvas.Children.Add(visual);
+            }
         }
     }
 }

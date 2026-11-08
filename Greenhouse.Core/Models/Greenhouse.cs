@@ -29,7 +29,9 @@ namespace GreenhouseSimulator.Core.Models
         {
             ArgumentNullException.ThrowIfNull(config);
             if (config.Width <= 0 || config.Length <= 0)
+            {
                 throw new ArgumentOutOfRangeException(nameof(config), "Width and length must be positive.");
+            }
 
             Config = config;
             Width = config.Width;
@@ -73,16 +75,26 @@ namespace GreenhouseSimulator.Core.Models
         {
             var missing = new List<string>();
             if (!HasActuator<Heater>())
+            {
                 missing.Add("обогреватель");
+            }
             if (!HasActuator<AirConditioner>())
+            {
                 missing.Add("кондиционер");
+            }
             if (!HasActuator<Humidifier>())
+            {
                 missing.Add("увлажнитель");
+            }
             if (!HasActuator<FertilizerDoser>())
+            {
                 missing.Add("дозатор удобрений");
+            }
 
             if (missing.Count == 0)
+            {
                 return null;
+            }
 
             return "Нет регулирующих устройств: " + string.Join(", ", missing) + ". Показатели без них не регулировались.";
         }
@@ -92,7 +104,9 @@ namespace GreenhouseSimulator.Core.Models
             foreach (Actuator actuator in _actuators)
             {
                 if (actuator is TActuator)
+                {
                     return true;
+                }
             }
 
             return false;

@@ -1,4 +1,4 @@
-using GreenhouseModel = GreenhouseSimulator.Core.Models.Greenhouse;
+﻿using GreenhouseModel = GreenhouseSimulator.Core.Models.Greenhouse;
 using GreenhouseSimulator.Core.Models.Actuators;
 using GreenhouseSimulator.Core.Models.Sensors;
 using System;
@@ -32,7 +32,9 @@ namespace Greenhouse.UI
         private void PaletteItem_MouseDown(object sender, MouseButtonEventArgs e)
         {
             if (sender is not Button btn || btn.Tag == null)
+            {
                 return;
+            }
 
             var data = new DataObject(DataFormats.StringFormat, btn.Tag.ToString());
             DragDrop.DoDragDrop(btn, data, DragDropEffects.Copy);
@@ -49,16 +51,22 @@ namespace Greenhouse.UI
         private void EditorCanvas_Drop(object sender, DragEventArgs e)
         {
             if (!e.Data.GetDataPresent(DataFormats.StringFormat))
+            {
                 return;
+            }
 
             string? itemType = e.Data.GetData(DataFormats.StringFormat) as string;
             if (string.IsNullOrWhiteSpace(itemType))
+            {
                 return;
+            }
 
             Point dropPosition = e.GetPosition(EditorCanvas);
             FrameworkElement? visualItem = CreateVisualItem(itemType);
             if (visualItem == null)
+            {
                 return;
+            }
 
             visualItem.Tag = itemType;
             PlaceVisual(visualItem, dropPosition.X, dropPosition.Y);
@@ -68,7 +76,9 @@ namespace Greenhouse.UI
         private void PlacedItem_MouseDown(object sender, MouseButtonEventArgs e)
         {
             if (sender is not FrameworkElement element)
+            {
                 return;
+            }
 
             SelectVisual(element);
             _draggedElement = element;
@@ -80,7 +90,9 @@ namespace Greenhouse.UI
         private void EditorCanvas_MouseMove(object sender, MouseEventArgs e)
         {
             if (_draggedElement == null)
+            {
                 return;
+            }
 
             Point mousePos = e.GetPosition(EditorCanvas);
             Canvas.SetLeft(_draggedElement, mousePos.X - _clickOffset.X);
@@ -90,7 +102,9 @@ namespace Greenhouse.UI
         private void EditorCanvas_MouseUp(object sender, MouseButtonEventArgs e)
         {
             if (_draggedElement == null)
+            {
                 return;
+            }
 
             _draggedElement.ReleaseMouseCapture();
             _draggedElement = null;
@@ -99,7 +113,9 @@ namespace Greenhouse.UI
         private void BtnRemoveSelected_Click(object sender, RoutedEventArgs e)
         {
             if (_selectedElement != null)
+            {
                 RemoveVisual(_selectedElement);
+            }
         }
 
         private void BtnHelp_Click(object sender, RoutedEventArgs e)
@@ -128,26 +144,36 @@ namespace Greenhouse.UI
         private void PlaceExistingDevices()
         {
             if (_existingPlaced || EditorCanvas.ActualWidth <= 0 || EditorCanvas.ActualHeight <= 0)
+            {
                 return;
+            }
 
             _existingPlaced = true;
 
             foreach (Sensor sensor in _greenhouse.GetAllSensors())
+            {
                 PlaceModel(sensor, sensor.Location);
+            }
 
             foreach (Actuator actuator in _greenhouse.GetAllActuators())
+            {
                 PlaceModel(actuator, actuator.Location);
+            }
         }
 
         private void PlaceModel(object device, (double X, double Y) location)
         {
             string? kind = KindOf(device);
             if (kind == null)
+            {
                 return;
+            }
 
             FrameworkElement? visual = CreateVisualItem(kind);
             if (visual == null)
+            {
                 return;
+            }
 
             visual.Tag = device;
             double x = location.X / _greenhouse.Width * EditorCanvas.ActualWidth;
@@ -168,7 +194,9 @@ namespace Greenhouse.UI
         private void SelectVisual(FrameworkElement visual)
         {
             if (_selectedElement != null)
+            {
                 _selectedElement.Opacity = 1;
+            }
 
             _selectedElement = visual;
             visual.Opacity = 0.55;
@@ -185,7 +213,9 @@ namespace Greenhouse.UI
 
             EditorCanvas.Children.Remove(visual);
             if (_selectedElement != visual)
+            {
                 return;
+            }
 
             _selectedElement = null;
             BtnRemoveSelected.IsEnabled = false;
@@ -199,7 +229,9 @@ namespace Greenhouse.UI
             foreach (object child in EditorCanvas.Children)
             {
                 if (child is not FrameworkElement element || element.Tag == null)
+                {
                     continue;
+                }
 
                 (double X, double Y) location = ToGreenhousePoint(element);
                 switch (element.Tag)
@@ -221,13 +253,17 @@ namespace Greenhouse.UI
             foreach (Sensor sensor in _greenhouse.GetAllSensors())
             {
                 if (!keptSensors.Contains(sensor))
+                {
                     _greenhouse.RemoveSensor(sensor);
+                }
             }
 
             foreach (Actuator actuator in _greenhouse.GetAllActuators())
             {
                 if (!keptActuators.Contains(actuator))
+                {
                     _greenhouse.RemoveActuator(actuator);
+                }
             }
         }
 
@@ -235,8 +271,14 @@ namespace Greenhouse.UI
         {
             double left = Canvas.GetLeft(element);
             double top = Canvas.GetTop(element);
-            if (double.IsNaN(left)) left = 0;
-            if (double.IsNaN(top)) top = 0;
+            if (double.IsNaN(left))
+            {
+                left = 0;
+            }
+            if (double.IsNaN(top))
+            {
+                top = 0;
+            }
 
             double centerX = left + element.Width / 2;
             double centerY = top + element.Height / 2;

@@ -57,7 +57,10 @@ namespace GreenhouseSimulator.Core.Models.Actuators
 
         public double GetAttenuation((double X, double Y) point, bool useGaussian = true)
         {
-            if (EffectiveRadius <= 0.0) return 0.0;
+            if (EffectiveRadius <= 0.0)
+            {
+                return 0.0;
+            }
 
             double dx = point.X - Location.X;
             double dy = point.Y - Location.Y;
@@ -65,7 +68,9 @@ namespace GreenhouseSimulator.Core.Models.Actuators
             double radiusSquared = EffectiveRadius * EffectiveRadius;
 
             if (useGaussian)
+            { 
                 return Math.Exp(-rSquared / (2.0 * radiusSquared));
+            }
 
             return 1.0 / (1.0 + rSquared / radiusSquared);
         }

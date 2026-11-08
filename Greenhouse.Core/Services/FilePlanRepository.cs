@@ -14,12 +14,16 @@ namespace GreenhouseSimulator.Core.Services
         public FilePlanRepository(string directoryPath)
         {
             if (string.IsNullOrWhiteSpace(directoryPath))
+            {
                 throw new ArgumentException("Directory path cannot be null or empty.", nameof(directoryPath));
+            }
 
             _directoryPath = directoryPath;
 
             if (!Directory.Exists(_directoryPath))
+            {
                 Directory.CreateDirectory(_directoryPath);
+            }
 
             _jsonOptions = new JsonSerializerOptions
             {
@@ -47,18 +51,24 @@ namespace GreenhouseSimulator.Core.Services
         public GrowingPlan LoadPlan(string cropName)
         {
             if (string.IsNullOrWhiteSpace(cropName))
+            {
                 throw new ArgumentException("Crop name cannot be null or empty.", nameof(cropName));
+            }
 
             string filePath = GetFilePath(cropName);
 
             if (!File.Exists(filePath))
+            {
                 throw new FileNotFoundException($"Growing plan for '{cropName}' not found.", filePath);
+            }
 
             string json = File.ReadAllText(filePath);
             var plan = JsonSerializer.Deserialize<GrowingPlan>(json, _jsonOptions);
 
             if (plan == null)
+            {
                 throw new InvalidOperationException($"Failed to load growing plan from '{filePath}'.");
+            }
 
             plan.EnsureValid();
             return plan;
@@ -72,7 +82,9 @@ namespace GreenhouseSimulator.Core.Services
             {
                 string? cropName = Path.GetFileNameWithoutExtension(filePath);
                 if (!string.IsNullOrWhiteSpace(cropName))
+                {
                     names.Add(cropName);
+                }
             }
 
             names.Sort(StringComparer.OrdinalIgnoreCase);
@@ -82,11 +94,15 @@ namespace GreenhouseSimulator.Core.Services
         private string GetFilePath(string cropName)
         {
             if (string.IsNullOrWhiteSpace(cropName))
+            {
                 throw new ArgumentException("Crop name cannot be null or empty.", nameof(cropName));
+            }
 
             string trimmed = cropName.Trim();
             if (trimmed.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
+            {
                 throw new ArgumentException("Crop name cannot contain path or file-name characters.", nameof(cropName));
+            }
 
             return Path.Combine(_directoryPath, $"{trimmed}.json");
         }

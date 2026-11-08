@@ -185,7 +185,9 @@ namespace GreenhouseSimulator.Core.Models.Environment
         public void ApplyActuators(IReadOnlyList<Actuator> actuators, double dt)
         {
             foreach (var actuator in actuators)
+            {
                 actuator.UpdateInertia(dt);
+            }
 
             for (int i = 0; i < WidthCells; i++)
             {
@@ -196,7 +198,9 @@ namespace GreenhouseSimulator.Core.Models.Environment
                     var center = GetCellCenter(i, j);
                     ClimateDelta totalDelta = ClimateDelta.Zero;
                     foreach (var actuator in actuators)
+                    {
                         totalDelta += actuator.GetImpactAt(center, dt, _config.UseGaussianAttenuation);
+                    }
 
                     _currentCells[i, j].ApplyDelta(totalDelta);
                 }

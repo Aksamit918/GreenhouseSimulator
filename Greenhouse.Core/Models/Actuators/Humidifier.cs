@@ -22,7 +22,9 @@ namespace GreenhouseSimulator.Core.Models.Actuators
         public override ClimateDelta GetImpactAt((double X, double Y) point, double dt, bool useGaussian = true)
         {
             if (CurrentPowerRatio <= 0.0)
+            {
                 return ClimateDelta.Zero;
+            }
 
             double effect = MaxPower * CurrentPowerRatio * GetAttenuation(point, useGaussian) * dt;
             return new ClimateDelta(-effect * AdiabaticCoolingFactor, effect, 0.0, 0.0);

@@ -27,10 +27,14 @@ namespace GreenhouseSimulator.Core.Models.Sensors
         public void SetThresholds(double target, double toleranceBelow, double toleranceAbove)
         {
             if (toleranceBelow < 0)
+            {
                 throw new ArgumentOutOfRangeException(nameof(toleranceBelow), "Tolerance cannot be negative.");
+            }
 
             if (toleranceAbove < 0)
+            {
                 throw new ArgumentOutOfRangeException(nameof(toleranceAbove), "Tolerance cannot be negative.");
+            }
 
             _targetValue = target;
             _toleranceBelow = toleranceBelow;
@@ -52,7 +56,9 @@ namespace GreenhouseSimulator.Core.Models.Sensors
                 double exitBelow = Math.Max(0.0, _toleranceBelow - Hysteresis);
                 double exitAbove = Math.Max(0.0, _toleranceAbove - Hysteresis);
                 if (signedDeviation >= -exitBelow && signedDeviation <= exitAbove)
+                {
                     IsInAlertState = false;
+                }
             }
 
             if (IsInAlertState)
