@@ -38,6 +38,8 @@ namespace GreenhouseSimulator.Core.Config
         public double PidKi { get; set; } = 0.05;
         public double PidKd { get; set; } = 0.02;
         public double MinActuatorWeight { get; set; } = Math.Exp(-0.5);
+        public double OverheatMargin { get; set; } = 1.5;
+        public double HumidityPercentPerDegree { get; set; } = 4.0;
 
         public void SaveToFile(string filePath)
         {

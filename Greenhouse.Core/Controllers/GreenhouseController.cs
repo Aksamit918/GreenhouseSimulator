@@ -19,6 +19,8 @@ namespace GreenhouseSimulator.Core.Controllers
 
     public class GreenhouseController
     {
+        private readonly List<string> _conflictWarnings = new();
+        public IReadOnlyList<string> ConflictWarnings => _conflictWarnings;
         public event Action<string, double>? AlertTriggered;
         private readonly Greenhouse _greenhouse;
         private readonly IPlanRepository _repository;
@@ -94,6 +96,8 @@ namespace GreenhouseSimulator.Core.Controllers
             {
                 throw new ArgumentException("Plan name cannot be empty.", nameof(planName));
             }
+
+            _conflictWarnings.Clear();
 
             _activePlan = _repository.LoadPlan(planName);
 
@@ -197,7 +201,7 @@ namespace GreenhouseSimulator.Core.Controllers
             }
         }
 
-        private void AssignZonalPower(Actuator actuator, SensorType sensorType, Func<ActiveSensor, double> errorOf)
+        private void AssignZonalPower(Actuator actuator, Func<ActiveSensor, double?> errorOf)
         {
             double minWeight = _greenhouse.Config.MinActuatorWeight;
             bool useGaussian = _greenhouse.Config.UseGaussianAttenuation;
@@ -205,17 +209,17 @@ namespace GreenhouseSimulator.Core.Controllers
             double? worstError = null;
             foreach (ActiveSensor sensor in _greenhouse.GetAllSensors().OfType<ActiveSensor>())
             {
-                if (sensor.Type != sensorType)
-                {
-                    continue;
-                }
-
                 if (actuator.GetAttenuation(sensor.Location, useGaussian) <= minWeight)
                 {
                     continue;
                 }
 
-                double error = errorOf(sensor);
+                double? error = errorOf(sensor);
+                if (error == null)
+                {
+                    continue;
+                }
+
                 if (worstError == null || error > worstError)
                 {
                     worstError = error;
@@ -245,6 +249,57 @@ namespace GreenhouseSimulator.Core.Controllers
             }
         }
 
+        private double? GetDehumidifyError(ActiveSensor sensor, ParameterCorridor humidity)
+        {
+            if (sensor.Type != SensorType.Humidity || sensor.CurrentValue <= humidity.MaxValue)
+            {
+                return null;
+            }
+
+            return (sensor.CurrentValue - humidity.TargetValue) / _greenhouse.Config.HumidityPercentPerDegree;
+        }
+
+        private bool IsNearOverheat(ActiveSensor sensor, ParameterCorridor tempCorridor)
+        {
+            double localTemp = _greenhouse.Grid.GetTemperatureAt(sensor.Location);
+            return localTemp > tempCorridor.MaxValue - _greenhouse.Config.OverheatMargin;
+        }
+
+        private void RecordUnresolvedHumidityConflicts(PlanPhase phase, ParameterCorridor tempCorridor)
+        {
+            double minWeight = _greenhouse.Config.MinActuatorWeight;
+            bool useGaussian = _greenhouse.Config.UseGaussianAttenuation;
+
+            foreach (ActiveSensor sensor in _greenhouse.GetAllSensors().OfType<ActiveSensor>())
+            {
+                if (sensor.Type != SensorType.Humidity || sensor.CurrentValue <= phase.HumidityCorridor.MaxValue)
+                {
+                    continue;
+                }
+
+                if (!IsNearOverheat(sensor, tempCorridor))
+                {
+                    continue;
+                }
+
+                bool hasReachableAc = _greenhouse.GetAllActuators()
+                    .OfType<AirConditioner>()
+                    .Any(ac => ac.GetAttenuation(sensor.Location, useGaussian) > minWeight);
+
+                if (hasReachableAc)
+                {
+                    continue;
+                }
+
+                double localTemp = _greenhouse.Grid.GetTemperatureAt(sensor.Location);
+                string warning = $"День {CurrentDay}, ч. {HourOfDay}: Конфликт в зоне ({sensor.Location.X:F1}; {sensor.Location.Y:F1}) — высокая влажность ({sensor.CurrentValue:F1}%) при риске перегрева ({localTemp:F1}°C), кондиционер в зоне отсутствует.";
+                if (!_conflictWarnings.Contains(warning))
+                {
+                    _conflictWarnings.Add(warning);
+                }
+            }
+        }
+
         private void RegulateEnvironment(PlanPhase phase)
         {
             ParameterCorridor tempCorridor = phase.GetTempCorridor(HourOfDay);
@@ -255,21 +310,54 @@ namespace GreenhouseSimulator.Core.Controllers
             }
 
             bool lightsOn = HourOfDay < phase.LightDurationHours;
+            RecordUnresolvedHumidityConflicts(phase, tempCorridor);
 
             foreach (var actuator in _greenhouse.GetAllActuators())
             {
                 switch (actuator)
                 {
                     case Heater heater:
-                        AssignZonalPower(heater, SensorType.Temperature, sensor => tempCorridor.TargetValue - sensor.CurrentValue);
+                        AssignZonalPower(heater, sensor =>
+                        {
+                            if (sensor.Type == SensorType.Temperature)
+                            {
+                                return tempCorridor.TargetValue - sensor.CurrentValue;
+                            }
+                            double? dehumidifyError = GetDehumidifyError(sensor, phase.HumidityCorridor);
+                            if (dehumidifyError == null || IsNearOverheat(sensor, tempCorridor))
+                            {
+                                return null;
+                            }
+                            return dehumidifyError;
+                        });
                         break;
 
                     case AirConditioner conditioner:
-                        AssignZonalPower(conditioner, SensorType.Temperature, sensor => sensor.CurrentValue - tempCorridor.TargetValue);
+                        AssignZonalPower(conditioner, sensor =>
+                        {
+                            if (sensor.Type == SensorType.Temperature)
+                            {
+                                return sensor.CurrentValue - tempCorridor.TargetValue;
+                            }
+                            double? dehumidifyError = GetDehumidifyError(sensor, phase.HumidityCorridor);
+                            if (dehumidifyError == null || !IsNearOverheat(sensor, tempCorridor))
+                            {
+                                return null;
+                            }
+                            return dehumidifyError;
+                        });
                         break;
 
                     case Humidifier humidifier:
-                        AssignZonalPower(humidifier, SensorType.Humidity, sensor => phase.HumidityCorridor.TargetValue - sensor.CurrentValue);
+                        AssignZonalPower(humidifier, sensor =>
+                        {
+                            if (sensor.Type != SensorType.Humidity)
+                            {
+                                return null;
+                            }
+
+                            return phase.HumidityCorridor.TargetValue - sensor.CurrentValue;
+                        });
                         break;
 
                     case LightingSystem lighting:
@@ -277,7 +365,15 @@ namespace GreenhouseSimulator.Core.Controllers
                         break;
 
                     case FertilizerDoser doser:
-                        AssignZonalPower(doser, SensorType.Ph, sensor => phase.PhCorridor.TargetValue - sensor.CurrentValue);
+                        AssignZonalPower(doser, sensor =>
+                        {
+                            if (sensor.Type != SensorType.Ph)
+                            {
+                                return null;
+                            }
+
+                            return phase.PhCorridor.TargetValue - sensor.CurrentValue;
+                        });
                         break;
                 }
             }
