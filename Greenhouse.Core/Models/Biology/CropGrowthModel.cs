@@ -20,7 +20,6 @@ namespace GreenhouseSimulator.Core.Models.Biology
         public double TotalStressIndex => ColdStress + HeatStress + HumidityStress + PhStress;
         public bool IsLethal { get; private set; }
         public string? LethalReason { get; private set; }
-
         public double YieldPotential
         {
             get
@@ -37,6 +36,7 @@ namespace GreenhouseSimulator.Core.Models.Biology
                 return sum / (_widthCells * _lengthCells);
             }
         }
+        public double UniformityIndex => Math.Clamp(100.0 - _config.UniformityPenaltyFactor * GetYieldStdDev(), 0.0, 100.0);
 
         public CropGrowthModel(SimulationConfig config, int widthCells, int lengthCells)
         {
@@ -193,6 +193,20 @@ namespace GreenhouseSimulator.Core.Models.Biology
             }
 
             HumidityStress += normalized;
+        }
+
+        public double GetYieldStdDev()
+        {
+            double mean = YieldPotential;
+            double sum = 0.0;
+
+            foreach (double cellYield in _cellYield)
+            {
+                double diff = cellYield - mean;
+                sum += diff * diff;
+            }
+
+            return Math.Sqrt(sum / _cellYield.Length);
         }
     }
 }

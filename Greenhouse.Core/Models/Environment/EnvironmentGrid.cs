@@ -318,5 +318,24 @@ namespace GreenhouseSimulator.Core.Models.Environment
         public double GetAverageHumidity() => GetAverageValue(cell => cell.RelativeHumidity);
         public double GetAveragePh() => GetAverageValue(cell => cell.Ph);
         public double GetAverageLight() => GetAverageValue(cell => cell.Light);
+
+
+        private double GetStandardDeviation(Func<ClimateCell, double> selector)
+        {
+            double mean = GetAverageValue(selector);
+            double sumSquares = 0.0;
+
+            foreach (ClimateCell cell in _currentCells)
+            {
+                double diff = selector(cell) - mean;
+                sumSquares += diff * diff;
+            }
+
+            return Math.Sqrt(sumSquares / _currentCells.Length);
+        }
+        public double GetTemperatureStdDev() => GetStandardDeviation(cell => cell.Temperature);
+        public double GetHumidityStdDev() => GetStandardDeviation(cell => cell.RelativeHumidity);
+        public double GetPhStdDev() => GetStandardDeviation(cell => cell.Ph);
+        public double GetLightStdDev() => GetStandardDeviation(cell => cell.Light);
     }
 }
