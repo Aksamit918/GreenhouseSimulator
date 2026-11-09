@@ -40,6 +40,15 @@ namespace GreenhouseSimulator.Core.Config
         public double MinActuatorWeight { get; set; } = Math.Exp(-0.5);
         public double OverheatMargin { get; set; } = 1.5;
         public double HumidityPercentPerDegree { get; set; } = 4.0;
+        public double BaseGrowthTemp { get; set; } = 5.0;
+        public double TempStressFactor { get; set; } = 0.08;
+        public double HumidityStressFactor { get; set; } = 0.005;
+        public double PhStressFactor { get; set; } = 0.5;
+        public double LethalMinTemp { get; set; } = 0.0;
+        public double LethalMaxTemp { get; set; } = 45.0;
+        public double LethalMinPh { get; set; } = 3.0;
+        public double LethalMaxPh { get; set; } = 9.0;
+        public double UniformityPenaltyFactor { get; set; } = 2.0;
 
         public void SaveToFile(string filePath)
         {

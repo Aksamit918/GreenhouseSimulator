@@ -1,5 +1,6 @@
 ﻿using GreenhouseSimulator.Core.Models;
 using GreenhouseSimulator.Core.Models.Actuators;
+using GreenhouseSimulator.Core.Models.Biology;
 using GreenhouseSimulator.Core.Models.Plans;
 using GreenhouseSimulator.Core.Models.Sensors;
 using GreenhouseSimulator.Core.Services;
@@ -24,6 +25,7 @@ namespace GreenhouseSimulator.Core.Controllers
         public event Action<string, double>? AlertTriggered;
         private readonly Greenhouse _greenhouse;
         private readonly IPlanRepository _repository;
+        private readonly CropGrowthModel _cropGrowth;
         private Dictionary<Actuator, PidController> _regulators = new();
         private readonly HashSet<ActiveSensor> _boundSensors = new();
         private GrowingPlan? _activePlan;
@@ -32,6 +34,7 @@ namespace GreenhouseSimulator.Core.Controllers
         private double? _previousTemperatureTarget;
 
         public Greenhouse Greenhouse => _greenhouse;
+        public CropGrowthModel CropGrowth => _cropGrowth;
         public GrowingPlan? ActivePlan => _activePlan;
         public DateTime? StartDate { get; private set; }
         public int ElapsedHours { get; private set; }
@@ -46,6 +49,7 @@ namespace GreenhouseSimulator.Core.Controllers
         {
             _greenhouse = greenhouse ?? throw new ArgumentNullException(nameof(greenhouse));
             _repository = repository ?? throw new ArgumentNullException(nameof(repository));
+            _cropGrowth = new CropGrowthModel(greenhouse.Config, greenhouse.Grid.WidthCells, greenhouse.Grid.LengthCells);
             _activePlan = null;
             ElapsedHours = 0;
             _isRunning = false;
@@ -98,6 +102,7 @@ namespace GreenhouseSimulator.Core.Controllers
             }
 
             _conflictWarnings.Clear();
+            _cropGrowth.Reset();
 
             _activePlan = _repository.LoadPlan(planName);
 
@@ -173,6 +178,14 @@ namespace GreenhouseSimulator.Core.Controllers
                 ApplySensorThresholds(phase);
                 RegulateEnvironment(phase);
                 _greenhouse.Tick(phase, HourOfDay);
+                _cropGrowth.Advance(_greenhouse.Grid, phase, HourOfDay, CurrentDay, _greenhouse.Config.HoursPerTick);
+                if (_cropGrowth.IsLethal)
+                {
+                    LastResult = SimulationResult.Failed;
+                    FailureMessage = _cropGrowth.LethalReason;
+                    StopCycle();
+                    return;
+                }
 
                 ElapsedHours++;
 

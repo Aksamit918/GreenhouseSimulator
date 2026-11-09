@@ -49,6 +49,8 @@ namespace GreenhouseSimulator.Core.Models.Environment
             return (x, y);
         }
 
+        public ClimateCell GetCell(int i, int j) => _currentCells[i, j];
+
         public (int i, int j) WorldToGridIndex((double X, double Y) coordinates)
         {
             int i = Math.Clamp((int)(coordinates.X / _config.GridStep), 0, WidthCells - 1);
