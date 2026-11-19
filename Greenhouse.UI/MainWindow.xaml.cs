@@ -23,6 +23,9 @@ namespace Greenhouse.UI
         private string? _climateRegime;
         private bool _editingExistingPlan;
 
+        // Для тепловой карты (квадратики)
+        private Rectangle[,] _heatmapRects;
+
         public MainWindow()
         {
             InitializeComponent();
@@ -47,6 +50,7 @@ namespace Greenhouse.UI
                 _timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
                 _timer.Tick += Timer_Tick;
 
+                InitHeatmap();
                 UpdateUI();
             }
             catch (Exception ex)
@@ -55,18 +59,112 @@ namespace Greenhouse.UI
             }
         }
 
-        private void BtnStart_Click(object sender, RoutedEventArgs e)
+        // --- ПРОСТОЙ РЕНДЕР КВАДРАТИКАМИ (HEATMAP) ---
+        private void InitHeatmap()
         {
-            if (PlansComboBox.SelectedItem == null)
+            if (_controller == null || _controller.Greenhouse == null) return;
+            
+            int w = _controller.Greenhouse.Grid.WidthCells;
+            int h = _controller.Greenhouse.Grid.LengthCells;
+            
+            _heatmapRects = new Rectangle[w, h];
+            HeatmapCanvas.Children.Clear();
+
+            for (int y = 0; y < h; y++)
             {
+                for (int x = 0; x < w; x++)
+                {
+                    var rect = new Rectangle
+                    {
+                        Opacity = 0.5,
+                        Visibility = Visibility.Collapsed
+                    };
+                    _heatmapRects[x, y] = rect;
+                    HeatmapCanvas.Children.Add(rect);
+                }
+            }
+        }
+
+        private void UpdateHeatmap()
+        {
+            if (_heatmapRects == null) return;
+
+            if (HeatmapComboBox.SelectedIndex == 0)
+            {
+                HeatmapCanvas.Visibility = Visibility.Collapsed;
                 return;
             }
+            HeatmapCanvas.Visibility = Visibility.Visible;
+
+            int mode = HeatmapComboBox.SelectedIndex;
+            var grid = _controller.Greenhouse.Grid;
+            int w = grid.WidthCells;
+            int h = grid.LengthCells;
+
+            // Чтобы не было ошибки деления на 0 при старте
+            double canvasWidth = Math.Max(1, GreenhouseCanvas.ActualWidth);
+            double canvasHeight = Math.Max(1, GreenhouseCanvas.ActualHeight);
+
+            double cellWidth = canvasWidth / w;
+            double cellHeight = canvasHeight / h;
+
+            for (int y = 0; y < h; y++)
+            {
+                for (int x = 0; x < w; x++)
+                {
+                    var rect = _heatmapRects[x, y];
+                    
+                    rect.Width = cellWidth;
+                    rect.Height = cellHeight;
+                    Canvas.SetLeft(rect, x * cellWidth);
+                    Canvas.SetTop(rect, y * cellHeight);
+                    rect.Visibility = Visibility.Visible;
+
+                    var cell = grid.GetCell(x, y);
+                    double val = 0, min = 0, max = 1;
+                    Color low = Colors.Blue, mid = Colors.Lime, high = Colors.Red;
+
+                    if (mode == 1) { val = cell.Temperature; min = 10; max = 35; low = Colors.Blue; mid = Colors.Lime; high = Colors.Red; }
+                    else if (mode == 2) { val = cell.RelativeHumidity; min = 40; max = 90; low = Colors.Yellow; mid = Colors.Cyan; high = Colors.Blue; }
+                    else if (mode == 3) { val = cell.Light; min = 0; max = 2000; low = Colors.Black; mid = Colors.Yellow; high = Colors.White; }
+                    else if (mode == 4) { val = cell.Ph; min = 4; max = 8; low = Colors.Red; mid = Colors.Lime; high = Colors.Purple; }
+
+                    rect.Fill = new SolidColorBrush(InterpolateColor(val, min, max, low, mid, high));
+                }
+            }
+        }
+
+        private Color InterpolateColor(double val, double min, double max, Color low, Color mid, Color high)
+        {
+            double ratio = Math.Clamp((val - min) / (max - min), 0.0, 1.0);
+            if (ratio < 0.5)
+            {
+                double t = ratio * 2.0;
+                return Color.FromArgb(255, (byte)(low.R + (mid.R - low.R) * t), (byte)(low.G + (mid.G - low.G) * t), (byte)(low.B + (mid.B - low.B) * t));
+            }
+            else
+            {
+                double t = (ratio - 0.5) * 2.0;
+                return Color.FromArgb(255, (byte)(mid.R + (high.R - mid.R) * t), (byte)(mid.G + (high.G - mid.G) * t), (byte)(mid.B + (high.B - mid.B) * t));
+            }
+        }
+
+        private void HeatmapComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (_controller != null) UpdateHeatmap();
+        }
+
+        // --- УПРАВЛЕНИЕ СИМУЛЯЦИЕЙ ---
+        private void BtnStart_Click(object sender, RoutedEventArgs e)
+        {
+            if (PlansComboBox.SelectedItem == null) return;
             try
             {
                 _controller.StartCycle(PlansComboBox.SelectedItem.ToString());
                 _timer.Start();
 
                 BtnStart.IsEnabled = false; PlansComboBox.IsEnabled = false;
+                if (BtnOpenEditor != null) BtnOpenEditor.IsEnabled = false;
                 BtnPause.IsEnabled = true; BtnStop.IsEnabled = true;
                 BtnPause.Content = "⏸ Пауза";
 
@@ -117,14 +215,15 @@ namespace Greenhouse.UI
                 {
                     CheckActuatorChanges(schemeEdited: true);
                 }
+                InitHeatmap(); // Сетка могла измениться
                 UpdateUI();
             }
         }
 
+        // --- ДОБАВЛЕНИЕ/РЕДАКТИРОВАНИЕ ПЛАНА ---
         private void BtnShowNewPlan_Click(object sender, RoutedEventArgs e)
         {
             _editingExistingPlan = false;
-
             PlanFormTitle.Text = "Новый план";
             InputCropName.IsEnabled = true;
             InputCropName.Text = "";
@@ -153,7 +252,6 @@ namespace Greenhouse.UI
                 PlanPhase phase = plan.GetPhaseForDay(1);
 
                 _editingExistingPlan = true;
-
                 PlanFormTitle.Text = "Изменить план";
                 InputCropName.IsEnabled = false;
                 InputCropName.Text = plan.CropName;
@@ -193,23 +291,11 @@ namespace Greenhouse.UI
                 for (int day = 1; day <= days; day++)
                 {
                     plan.AddPhase(new PlanPhase(
-                        day,
-                        dayTemp,
-                        ph,
-                        humidity,
-                        lightHours,
-                        nightTemp,
-                        dayLength));
+                        day, dayTemp, ph, humidity, lightHours, nightTemp, dayLength));
                 }
 
-                if (_editingExistingPlan)
-                {
-                    _controller.UpdatePlan(plan);
-                }
-                else
-                {
-                    _controller.AddPlan(plan);
-                }
+                if (_editingExistingPlan) _controller.UpdatePlan(plan);
+                else _controller.AddPlan(plan);
 
                 PlansComboBox.ItemsSource = _controller.ListPlans();
                 PlansComboBox.SelectedItem = plan.CropName;
@@ -222,17 +308,12 @@ namespace Greenhouse.UI
                 }
 
                 UpdateUI();
-
                 string action = _editingExistingPlan ? "обновлён" : "создан";
                 MessageBox.Show($"План '{plan.CropName}' {action} и сохранён.", "Успех", MessageBoxButton.OK, MessageBoxImage.Information);
             }
             catch (ArgumentOutOfRangeException ex) when (ex.ParamName is "minValue" or "maxValue" or "targetValue")
             {
-                MessageBox.Show(
-                    "Минимум должен быть меньше максимума, а идеальное значение — между ними.",
-                    "Ошибка",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Error);
+                MessageBox.Show("Минимум должен быть меньше максимума, а идеальное значение — между ними.", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
             }
             catch (Exception ex)
             {
@@ -240,39 +321,21 @@ namespace Greenhouse.UI
             }
         }
 
-        private static double ParseUserNumber(string text)
-        {
-            return double.Parse(text.Trim().Replace('.', ','));
-        }
-
-        private static void SetCorridorInputs(TextBox min, TextBox target, TextBox max, ParameterCorridor corridor)
-        {
-            SetCorridorInputs(min, target, max, corridor.MinValue, corridor.TargetValue, corridor.MaxValue);
-        }
-
+        private static double ParseUserNumber(string text) => double.Parse(text.Trim().Replace('.', ','));
+        private static void SetCorridorInputs(TextBox min, TextBox target, TextBox max, ParameterCorridor corridor) => SetCorridorInputs(min, target, max, corridor.MinValue, corridor.TargetValue, corridor.MaxValue);
         private static void SetCorridorInputs(TextBox min, TextBox target, TextBox max, double minValue, double targetValue, double maxValue)
         {
             min.Text = FormatPlanNumber(minValue);
             target.Text = FormatPlanNumber(targetValue);
             max.Text = FormatPlanNumber(maxValue);
         }
-
-        private static ParameterCorridor ReadCorridor(TextBox min, TextBox target, TextBox max)
-        {
-            return new ParameterCorridor(
-                ParseUserNumber(min.Text),
-                ParseUserNumber(max.Text),
-                ParseUserNumber(target.Text));
-        }
-
+        private static ParameterCorridor ReadCorridor(TextBox min, TextBox target, TextBox max) => new ParameterCorridor(ParseUserNumber(min.Text), ParseUserNumber(max.Text), ParseUserNumber(target.Text));
         private static string FormatPlanNumber(double value) => value.ToString("0.##");
 
+        // --- ЛОГИКА ТАЙМЕРА И ОТЧЕТА ---
         private void Timer_Tick(object sender, EventArgs e)
         {
-            if (_controller.IsPaused)
-            {
-                return;
-            }
+            if (_controller.IsPaused) return;
 
             if (!_controller.IsRunning)
             {
@@ -281,15 +344,8 @@ namespace Greenhouse.UI
             }
 
             _currentAlerts.Clear();
-            try
-            {
-                _controller.SimulationTick();
-            }
-            catch (Exception)
-            {
-                FinishStoppedCycle();
-                return;
-            }
+            try { _controller.SimulationTick(); }
+            catch { FinishStoppedCycle(); return; }
 
             if (!_controller.IsRunning)
             {
@@ -307,60 +363,28 @@ namespace Greenhouse.UI
             _timer.Stop();
 
             BtnStart.IsEnabled = true; PlansComboBox.IsEnabled = true;
+            if (BtnOpenEditor != null) BtnOpenEditor.IsEnabled = true;
             BtnPause.IsEnabled = false; BtnStop.IsEnabled = false;
 
             TxtStatus.Text = "Статус: Остановлено";
             TxtHeader.Text = "Ожидание запуска...";
             UpdateUI();
-            ShowCycleResult();
-        }
-
-        private void ShowCycleResult()
-        {
+            
+            // Вызов Окна Отчета (REP-02)
             SimulationResult result = _controller.TakeResult(out string? failureMessage);
-            if (result == SimulationResult.None)
+            if (result != SimulationResult.None)
             {
-                return;
-            }
-
-            string crop = _controller.ActivePlan?.CropName ?? "план";
-            int plannedDays = _controller.ActivePlan?.TotalDurationDays ?? 0;
-            int elapsedDays = _controller.ElapsedHours / 24;
-            int elapsedHours = _controller.ElapsedHours % 24;
-
-            switch (result)
-            {
-                case SimulationResult.Completed:
-                    MessageBox.Show(
-                        $"Цикл «{crop}» завершён успешно.\nПлан выполнен полностью: {plannedDays} суток.",
-                        "Цикл завершён",
-                        MessageBoxButton.OK,
-                        MessageBoxImage.Information);
-                    break;
-                case SimulationResult.Failed:
-                    MessageBox.Show(
-                        $"Цикл «{crop}» не был выполнен.\n{failureMessage}",
-                        "Цикл не выполнен",
-                        MessageBoxButton.OK,
-                        MessageBoxImage.Error);
-                    break;
-                case SimulationResult.Stopped:
-                    MessageBox.Show(
-                        $"Цикл «{crop}» остановлен и не завершён.\nПрошло {elapsedDays} суток, {elapsedHours} часов из {plannedDays} суток.",
-                        "Цикл не завершён",
-                        MessageBoxButton.OK,
-                        MessageBoxImage.Warning);
-                    break;
+                var reportWindow = new CycleReportWindow(_controller, result, failureMessage);
+                reportWindow.Owner = this;
+                reportWindow.ShowDialog();
             }
         }
 
+        // --- ЛОГИРОВАНИЕ ---
         private void CheckActuatorChanges(bool schemeEdited = false, bool clockAdvanced = false)
         {
             int elapsed = _controller.ElapsedHours;
-            if (clockAdvanced && elapsed > 0)
-            {
-                elapsed--;
-            }
+            if (clockAdvanced && elapsed > 0) elapsed--;
 
             int day = elapsed / 24 + 1;
             int hour = elapsed % 24;
@@ -368,60 +392,41 @@ namespace Greenhouse.UI
             LogClimateRegime(timeStamp, day, hour);
             var gh = _controller.Greenhouse;
             List<Actuator> actuators = gh.GetAllActuators();
+            
             string temperature = $"{gh.CurrentTemperature:F1}°C";
             string humidity = $"{gh.CurrentHumidity:F1}%";
             string ph = $"pH {gh.CurrentPh:F2}";
 
-            LogRegulatorGroup(
-                timeStamp,
-                actuators,
-                actuator => actuator is Heater,
+            LogRegulatorGroup(timeStamp, actuators, a => a is Heater,
                 count => $"Для повышения температуры – включены обогреватели ({count} шт.). (Факт: {temperature})",
                 $"Температура стабилизировалась ({temperature}) - обогреватель выключен.",
-                previous => $"Со схемы убраны обогреватели ({previous} шт.) — нагрев прекращён. (Факт: {temperature})",
-                (previous, current) => $"Работающих обогревателей: {current} шт. (было {previous}). (Факт: {temperature})",
-                (previous, current) => current == 0
-                    ? $"Со схемы убраны обогреватели ({previous} шт.)."
-                    : $"Обогревателей на схеме: {current} шт. (было {previous}), сейчас выключены.",
+                prev => $"Со схемы убраны обогреватели ({prev} шт.) — нагрев прекращён. (Факт: {temperature})",
+                (prev, cur) => $"Работающих обогревателей: {cur} шт. (было {prev}). (Факт: {temperature})",
+                (prev, cur) => cur == 0 ? $"Со схемы убраны обогреватели ({prev} шт.)." : $"Обогревателей на схеме: {cur} шт. (было {prev}), сейчас выключены.",
                 schemeEdited);
 
-            LogRegulatorGroup(
-                timeStamp,
-                actuators,
-                actuator => actuator is AirConditioner,
+            LogRegulatorGroup(timeStamp, actuators, a => a is AirConditioner,
                 count => $"Для понижения температуры – включены кондиционеры ({count} шт.). (Факт: {temperature})",
                 $"Температура стабилизировалась ({temperature}) - кондиционер выключен.",
-                previous => $"Со схемы убраны кондиционеры ({previous} шт.) — охлаждение прекращено. (Факт: {temperature})",
-                (previous, current) => $"Работающих кондиционеров: {current} шт. (было {previous}). (Факт: {temperature})",
-                (previous, current) => current == 0
-                    ? $"Со схемы убраны кондиционеры ({previous} шт.)."
-                    : $"Кондиционеров на схеме: {current} шт. (было {previous}), сейчас выключены.",
+                prev => $"Со схемы убраны кондиционеры ({prev} шт.) — охлаждение прекращено. (Факт: {temperature})",
+                (prev, cur) => $"Работающих кондиционеров: {cur} шт. (было {prev}). (Факт: {temperature})",
+                (prev, cur) => cur == 0 ? $"Со схемы убраны кондиционеры ({prev} шт.)." : $"Кондиционеров на схеме: {cur} шт. (было {prev}), сейчас выключены.",
                 schemeEdited);
 
-            LogRegulatorGroup(
-                timeStamp,
-                actuators,
-                actuator => actuator is Humidifier,
+            LogRegulatorGroup(timeStamp, actuators, a => a is Humidifier,
                 count => $"Для повышения влажности – включены увлажнители ({count} шт.). (Факт: {humidity})",
                 $"Влажность стабилизировалась ({humidity}) - увлажнитель выключен.",
-                previous => $"Со схемы убраны увлажнители ({previous} шт.) — увлажнение прекращено. (Факт: {humidity})",
-                (previous, current) => $"Работающих увлажнителей: {current} шт. (было {previous}). (Факт: {humidity})",
-                (previous, current) => current == 0
-                    ? $"Со схемы убраны увлажнители ({previous} шт.)."
-                    : $"Увлажнителей на схеме: {current} шт. (было {previous}), сейчас выключены.",
+                prev => $"Со схемы убраны увлажнители ({prev} шт.) — увлажнение прекращено. (Факт: {humidity})",
+                (prev, cur) => $"Работающих увлажнителей: {cur} шт. (было {prev}). (Факт: {humidity})",
+                (prev, cur) => cur == 0 ? $"Со схемы убраны увлажнители ({prev} шт.)." : $"Увлажнителей на схеме: {cur} шт. (было {prev}), сейчас выключены.",
                 schemeEdited);
 
-            LogRegulatorGroup(
-                timeStamp,
-                actuators,
-                actuator => actuator is FertilizerDoser,
+            LogRegulatorGroup(timeStamp, actuators, a => a is FertilizerDoser,
                 count => $"Для регулировки pH – активированы дозаторы ({count} шт.). (Факт: {ph})",
                 $"pH нормализовался ({gh.CurrentPh:F2}) - дозатор выключен.",
-                previous => $"Со схемы убраны дозаторы ({previous} шт.) — корректировка pH прекращена. (Факт: {ph})",
-                (previous, current) => $"Работающих дозаторов: {current} шт. (было {previous}). (Факт: {ph})",
-                (previous, current) => current == 0
-                    ? $"Со схемы убраны дозаторы ({previous} шт.)."
-                    : $"Дозаторов на схеме: {current} шт. (было {previous}), сейчас выключены.",
+                prev => $"Со схемы убраны дозаторы ({prev} шт.) — корректировка pH прекращена. (Факт: {ph})",
+                (prev, cur) => $"Работающих дозаторов: {cur} шт. (было {prev}). (Факт: {ph})",
+                (prev, cur) => cur == 0 ? $"Со схемы убраны дозаторы ({prev} шт.)." : $"Дозаторов на схеме: {cur} шт. (было {prev}), сейчас выключены.",
                 schemeEdited);
 
             _actuatorStates.Clear();
@@ -431,80 +436,43 @@ namespace Greenhouse.UI
             }
         }
 
-        private void LogRegulatorGroup(
-            string timeStamp,
-            IReadOnlyList<Actuator> actuators,
-            Func<Actuator, bool> match,
-            Func<int, string> turnedOn,
-            string turnedOff,
-            Func<int, string> removedWhileWorking,
-            Func<int, int, string> resized,
-            Func<int, int, string> idleCountChanged,
-            bool schemeEdited)
+        private void LogRegulatorGroup(string timeStamp, IReadOnlyList<Actuator> actuators, Func<Actuator, bool> match, Func<int, string> turnedOn, string turnedOff, Func<int, string> removedWhileWorking, Func<int, int, string> resized, Func<int, int, string> idleCountChanged, bool schemeEdited)
         {
-            int previousTotal = 0;
-            int previousOn = 0;
-            foreach (KeyValuePair<Actuator, bool> pair in _actuatorStates)
-            {
-                if (!match(pair.Key))
-                {
-                    continue;
-                }
+            int previousTotal = 0, previousOn = 0, currentTotal = 0, currentOn = 0;
+            foreach (var pair in _actuatorStates) { if (match(pair.Key)) { previousTotal++; if (pair.Value) previousOn++; } }
+            foreach (var a in actuators) { if (match(a)) { currentTotal++; if (a.IsOn) currentOn++; } }
 
-                previousTotal++;
-                if (pair.Value)
-                {
-                    previousOn++;
-                }
-            }
-
-            int currentTotal = 0;
-            int currentOn = 0;
-            foreach (Actuator actuator in actuators)
-            {
-                if (!match(actuator))
-                {
-                    continue;
-                }
-
-                currentTotal++;
-                if (actuator.IsOn)
-                {
-                    currentOn++;
-                }
-            }
-
-            if (previousTotal == currentTotal && previousOn == currentOn)
-            {
-                return;
-            }
+            if (previousTotal == currentTotal && previousOn == currentOn) return;
 
             string? line = null;
-            if (currentOn > 0 && previousOn == 0)
-            {
-                line = turnedOn(currentOn);
-            }
-            else if (currentOn == 0 && previousOn > 0 && currentTotal == 0)
-            {
-                line = removedWhileWorking(previousTotal);
-            }
-            else if (currentOn == 0 && previousOn > 0)
-            {
-                line = turnedOff;
-            }
-            else if (currentOn > 0 && previousOn > 0 && currentOn != previousOn)
-            {
-                line = resized(previousOn, currentOn);
-            }
-            else if (previousTotal != currentTotal && (previousTotal > 0 || schemeEdited))
-            {
-                line = idleCountChanged(previousTotal, currentTotal);
-            }
+            if (currentOn > 0 && previousOn == 0) line = turnedOn(currentOn);
+            else if (currentOn == 0 && previousOn > 0 && currentTotal == 0) line = removedWhileWorking(previousTotal);
+            else if (currentOn == 0 && previousOn > 0) line = turnedOff;
+            else if (currentOn > 0 && previousOn > 0 && currentOn != previousOn) line = resized(previousOn, currentOn);
+            else if (previousTotal != currentTotal && (previousTotal > 0 || schemeEdited)) line = idleCountChanged(previousTotal, currentTotal);
 
-            if (!string.IsNullOrEmpty(line))
-            {
-                TxtHistory.Text = $"{timeStamp} {line}\n\n" + TxtHistory.Text;
-            }
+            if (!string.IsNullOrEmpty(line)) TxtHistory.Text = $"{timeStamp} {line}\n\n" + TxtHistory.Text;
+        }
+
+        private void LogClimateRegime(string timeStamp, int day, int hour)
+        {
+            if (!TryDescribeClimate(day, hour, out string description) || _climateRegime == description) return;
+            _climateRegime = description;
+            TxtHistory.Text = $"{timeStamp} {description}\n\n" + TxtHistory.Text;
+        }
+
+        private bool TryDescribeClimate(out string description) => TryDescribeClimate(_controller.CurrentDay, _controller.HourOfDay, out description);
+
+        private bool TryDescribeClimate(int day, int hour, out string description)
+        {
+            description = "";
+            if (_controller.ActivePlan == null || day > _controller.ActivePlan.TotalDurationDays) return false;
+
+            PlanPhase phase = _controller.ActivePlan.GetPhaseForDay(day);
+            ParameterCorridor corridor = phase.GetTempCorridor(hour);
+            string period = phase.IsDaytime(hour) ? "День" : "Ночь";
+            description = $"{period}. Целевая температура {corridor.TargetValue:0.##}°C (коридор {corridor.MinValue:0.##}–{corridor.MaxValue:0.##}).";
+            return true;
         }
 
         private void OnAlertTriggered(string sensorId, double badValue)
@@ -512,44 +480,7 @@ namespace Greenhouse.UI
             _currentAlerts.Add($"• {sensorId}: {badValue:F1}");
         }
 
-        private void LogClimateRegime(string timeStamp, int day, int hour)
-        {
-            if (!TryDescribeClimate(day, hour, out string description) || _climateRegime == description)
-            {
-                return;
-            }
-
-            _climateRegime = description;
-            TxtHistory.Text = $"{timeStamp} {description}\n\n" + TxtHistory.Text;
-        }
-
-        private bool TryDescribeClimate(out string description)
-        {
-            return TryDescribeClimate(_controller.CurrentDay, _controller.HourOfDay, out description);
-        }
-
-        private bool TryDescribeClimate(int day, int hour, out string description)
-        {
-            description = "";
-            if (_controller.ActivePlan == null)
-            {
-                return false;
-            }
-
-            if (day > _controller.ActivePlan.TotalDurationDays)
-            {
-                return false;
-            }
-
-            PlanPhase phase = _controller.ActivePlan.GetPhaseForDay(day);
-            ParameterCorridor corridor = phase.GetTempCorridor(hour);
-            string period = phase.IsDaytime(hour) ? "День" : "Ночь";
-            description = $"{period}. Целевая температура {FormatValue(corridor.TargetValue)}°C (коридор {FormatValue(corridor.MinValue)}–{FormatValue(corridor.MaxValue)}).";
-            return true;
-        }
-
-        private static string FormatValue(double value) => value.ToString("0.##");
-
+        // --- ГРАФИКА И ОБНОВЛЕНИЕ ЭКРАНА ---
         private void GreenhouseCanvas_SizeChanged(object sender, SizeChangedEventArgs e)
         {
             UpdateUI();
@@ -557,10 +488,9 @@ namespace Greenhouse.UI
 
         private void UpdateUI()
         {
-            if (_controller == null || _controller.Greenhouse == null)
-            {
-                return;
-            }
+            if (_controller == null || _controller.Greenhouse == null) return;
+            
+            UpdateHeatmap();
 
             if (_controller.IsRunning)
             {
@@ -601,10 +531,7 @@ namespace Greenhouse.UI
 
             double cw = GreenhouseCanvas.ActualWidth;
             double ch = GreenhouseCanvas.ActualHeight;
-            if (cw == 0 || ch == 0)
-            {
-                return;
-            }
+            if (cw == 0 || ch == 0) return;
 
             var gh = _controller.Greenhouse;
             double scaleX = cw / gh.Width;
@@ -625,6 +552,7 @@ namespace Greenhouse.UI
             }
         }
 
+        // --- МЕТОДЫ РИСОВАНИЯ ФИГУР ---
         private LinearGradientBrush GetGradient(Color top, Color bottom)
         {
             return new LinearGradientBrush(top, bottom, new Point(0, 0), new Point(0, 1));

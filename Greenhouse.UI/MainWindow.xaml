@@ -32,17 +32,28 @@
                             <Button x:Name="BtnStop" Content="■ Стоп" Padding="10" Background="#F44336" Foreground="White" Click="BtnStop_Click" IsEnabled="False" Width="70"/>
                         </StackPanel>
 
-                        <Button Content="✏️ Открыть редактор расстановки" Padding="7" Margin="0,0,0,10" Background="#607D8B" Foreground="White" Click="BtnOpenEditor_Click"/>
+                        <!-- Кнопка редактора -->
+                        <Button x:Name="BtnOpenEditor" Content="✏️ Открыть редактор расстановки" Padding="7" Margin="0,0,0,10" Background="#607D8B" Foreground="White" Click="BtnOpenEditor_Click"/>
+
+                        <!-- БЛОК HEATMAP (Квадратики) -->
+                        <TextBlock Text="Слой тепловой карты (Heatmap):" Margin="0,5,0,5"/>
+                        <ComboBox x:Name="HeatmapComboBox" Padding="5" SelectionChanged="HeatmapComboBox_SelectionChanged">
+                            <ComboBoxItem Content="Нет (Скрыто)" IsSelected="True"/>
+                            <ComboBoxItem Content="Температура (°C)"/>
+                            <ComboBoxItem Content="Влажность (%)"/>
+                            <ComboBoxItem Content="Освещенность (Lx)"/>
+                            <ComboBoxItem Content="Кислотность (pH)"/>
+                        </ComboBox>
 
                         <TextBlock x:Name="TxtStatus" Text="Статус: Остановлено" Margin="0,10,0,0" FontStyle="Italic" Foreground="Gray"/>
                     </StackPanel>
                 </GroupBox>
 
-                <GroupBox Header="Текущие предупреждения" Margin="0,15,0,0" Padding="10" FontWeight="Bold">
+                <GroupBox Header="Текущие предупреждения" Margin="0,10,0,0" Padding="10" FontWeight="Bold">
                     <TextBlock x:Name="TxtAlerts" Text="Всё в норме" Foreground="DarkGreen" TextWrapping="Wrap" TextElement.FontWeight="Normal"/>
                 </GroupBox>
 
-                <GroupBox Header="Журнал действий автоматики" Margin="0,15,0,0" Padding="10" FontWeight="Bold" Height="220">
+                <GroupBox Header="Журнал действий автоматики" Margin="0,10,0,0" Padding="10" FontWeight="Bold" Height="170">
                     <ScrollViewer VerticalScrollBarVisibility="Auto">
                         <TextBlock x:Name="TxtHistory" TextElement.FontWeight="Normal" TextWrapping="Wrap" FontSize="11" Foreground="#333"/>
                     </ScrollViewer>
@@ -62,12 +73,17 @@
                     </StackPanel>
 
                     <Border Grid.Row="1" BorderBrush="#333" BorderThickness="3" Background="White" Margin="10">
-                        <Canvas x:Name="GreenhouseCanvas" ClipToBounds="True" SizeChanged="GreenhouseCanvas_SizeChanged"/>
+                        <!-- Два холста: один под квадратики, другой под иконки приборов -->
+                        <Grid>
+                            <Canvas x:Name="HeatmapCanvas" ClipToBounds="True"/>
+                            <Canvas x:Name="GreenhouseCanvas" ClipToBounds="True" SizeChanged="GreenhouseCanvas_SizeChanged"/>
+                        </Grid>
                     </Border>
                 </Grid>
             </GroupBox>
         </Grid>
 
+        <!-- Всплывающее окно плана -->
         <Grid x:Name="OverlayNewPlan" Background="#80000000" Visibility="Collapsed" Panel.ZIndex="100">
             <Border Background="White" Width="460" MaxHeight="640" CornerRadius="10" Padding="20" VerticalAlignment="Center" HorizontalAlignment="Center">
                 <DockPanel>
