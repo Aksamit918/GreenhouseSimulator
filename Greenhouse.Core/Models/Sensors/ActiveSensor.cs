@@ -41,6 +41,12 @@ namespace GreenhouseSimulator.Core.Models.Sensors
             _toleranceAbove = toleranceAbove;
         }
 
+        public override void ResetMeasurement()
+        {
+            base.ResetMeasurement();
+            IsInAlertState = false;
+        }
+
         public override void UpdateMeasurement(double newValue)
         {
             CurrentValue = newValue;

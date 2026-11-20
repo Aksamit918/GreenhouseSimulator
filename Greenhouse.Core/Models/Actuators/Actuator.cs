@@ -39,6 +39,13 @@ namespace GreenhouseSimulator.Core.Models.Actuators
 
         public void TurnOff() => SetTargetPower(0.0);
 
+        public virtual void Reset()
+        {
+            TargetPowerRatio = 0.0;
+            CurrentPowerRatio = 0.0;
+            TotalEnergyKwh = 0.0;
+        }
+
         public virtual void UpdateInertia(double dt)
         {
             if (CurrentPowerRatio < TargetPowerRatio)

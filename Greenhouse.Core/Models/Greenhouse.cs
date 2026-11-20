@@ -112,6 +112,22 @@ namespace GreenhouseSimulator.Core.Models
             return false;
         }
 
+        public void ResetCycleState()
+        {
+            Grid.Reset();
+            _randomProvider.Reset();
+
+            foreach (Sensor sensor in _sensors)
+            {
+                sensor.ResetMeasurement();
+            }
+
+            foreach (Actuator actuator in _actuators)
+            {
+                actuator.Reset();
+            }
+        }
+
         public void Tick(PlanPhase phase, int hourOfDay)
         {
             ArgumentNullException.ThrowIfNull(phase);

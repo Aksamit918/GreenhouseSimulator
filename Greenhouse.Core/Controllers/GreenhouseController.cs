@@ -103,6 +103,9 @@ namespace GreenhouseSimulator.Core.Controllers
 
             _conflictWarnings.Clear();
             _cropGrowth.Reset();
+            _greenhouse.ResetCycleState();
+            _previousTemperatureTarget = null;
+            ResetRegulators();
 
             _activePlan = _repository.LoadPlan(planName);
 

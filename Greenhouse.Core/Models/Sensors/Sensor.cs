@@ -25,6 +25,11 @@ namespace GreenhouseSimulator.Core.Models.Sensors
             Location = location;
         }
 
+        public virtual void ResetMeasurement()
+        {
+            CurrentValue = 0.0;
+        }
+
         public abstract void UpdateMeasurement(double value);
     }
 }

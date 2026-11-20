@@ -10,5 +10,6 @@ namespace GreenhouseSimulator.Core.Services
     {
         double GetBasicRandomVariable();
         double GetNextGaussian(double mean = 0.0, double sigma = 1.0);
+        void Reset();
     }
 }

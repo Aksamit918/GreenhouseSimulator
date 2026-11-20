@@ -41,6 +41,21 @@ namespace GreenhouseSimulator.Core.Models.Environment
             }
         }
 
+        public void Reset()
+        {
+            for (int i = 0; i < WidthCells; i++)
+            {
+                for (int j = 0; j < LengthCells; j++)
+                {
+                    _currentCells[i, j].Temperature = _config.InitialTemperature;
+                    _currentCells[i, j].AbsoluteHumidity = _config.InitialAbsoluteHumidity;
+                    _currentCells[i, j].Light = _config.InitialLight;
+                    _currentCells[i, j].Ph = _config.InitialPh;
+                    _nextCells[i, j].CopyFrom(_currentCells[i, j]);
+                }
+            }
+        }
+
         public (double X, double Y) GetCellCenter(int i, int j)
         {
             double x = (i + 0.5) * _config.GridStep;

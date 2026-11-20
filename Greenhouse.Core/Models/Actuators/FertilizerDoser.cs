@@ -18,6 +18,12 @@ namespace GreenhouseSimulator.Core.Models.Actuators
             TotalReagentConsumedMl += InjectionRateMlPerHour * CurrentPowerRatio * dt;
         }
 
+        public override void Reset()
+        {
+            base.Reset();
+            TotalReagentConsumedMl = 0.0;
+        }
+
         public override ClimateDelta GetImpactAt((double X, double Y) point, double dt, bool useGaussian = true)
         {
             if (CurrentPowerRatio <= 0.0)

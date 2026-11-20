@@ -9,11 +9,18 @@ namespace GreenhouseSimulator.Core.Services
 {
     public class RandomProvider : IRandomProvider
     {
-        private readonly Random _random;
+        private readonly int _seed;
+        private Random _random;
 
         public RandomProvider(SimulationConfig config)
         {
-            _random = new Random(config.RandomSeed);
+            _seed = config.RandomSeed;
+            _random = new Random(_seed);
+        }
+
+        public void Reset()
+        {
+            _random = new Random(_seed);
         }
 
         public double GetBasicRandomVariable()
