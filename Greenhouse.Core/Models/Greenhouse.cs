@@ -136,32 +136,48 @@ namespace GreenhouseSimulator.Core.Models
             UpdateSensors();
         }
 
+        public void SampleMissingSensors()
+        {
+            foreach (Sensor sensor in _sensors)
+            {
+                if (!sensor.HasMeasurement)
+                {
+                    MeasureSensor(sensor);
+                }
+            }
+        }
+
         private void UpdateSensors()
         {
-            foreach (var sensor in _sensors)
+            foreach (Sensor sensor in _sensors)
             {
-                double noise = sensor.SensorNoiseSigma > 0.0
-                    ? _randomProvider.GetNextGaussian(0.0, sensor.SensorNoiseSigma)
-                    : 0.0;
+                MeasureSensor(sensor);
+            }
+        }
 
-                switch (sensor.Type)
-                {
-                    case SensorType.Temperature:
-                        sensor.UpdateMeasurement(Grid.GetTemperatureAt(sensor.Location) + noise);
-                        break;
+        private void MeasureSensor(Sensor sensor)
+        {
+            double noise = sensor.SensorNoiseSigma > 0.0
+                ? _randomProvider.GetNextGaussian(0.0, sensor.SensorNoiseSigma)
+                : 0.0;
 
-                    case SensorType.Humidity:
-                        sensor.UpdateMeasurement(Grid.GetHumidityAt(sensor.Location) + noise);
-                        break;
+            switch (sensor.Type)
+            {
+                case SensorType.Temperature:
+                    sensor.UpdateMeasurement(Grid.GetTemperatureAt(sensor.Location) + noise);
+                    break;
 
-                    case SensorType.Ph:
-                        sensor.UpdateMeasurement(Grid.GetPhAt(sensor.Location) + noise);
-                        break;
+                case SensorType.Humidity:
+                    sensor.UpdateMeasurement(Grid.GetHumidityAt(sensor.Location) + noise);
+                    break;
 
-                    case SensorType.Light:
-                        sensor.UpdateMeasurement(Grid.GetLightAt(sensor.Location) + noise);
-                        break;
-                }
+                case SensorType.Ph:
+                    sensor.UpdateMeasurement(Grid.GetPhAt(sensor.Location) + noise);
+                    break;
+
+                case SensorType.Light:
+                    sensor.UpdateMeasurement(Grid.GetLightAt(sensor.Location) + noise);
+                    break;
             }
         }
     }

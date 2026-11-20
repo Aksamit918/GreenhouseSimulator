@@ -1,5 +1,7 @@
 ﻿using GreenhouseSimulator.Core.Controllers;
 using GreenhouseSimulator.Core.Models.Actuators;
+using GreenhouseSimulator.Core.Models.Biology;
+using System.Collections.Generic;
 using System.Linq;
 using System.Windows;
 using System.Text.Json;
@@ -19,15 +21,59 @@ namespace Greenhouse.UI
             TxtMainTitle.Text = $"Отчет цикла: {_controller.ActivePlan?.CropName?.ToUpper() ?? "UNKNOWN"}";
 
             // Блок 1 (Агрономия)
-            if (result == SimulationResult.Completed) TxtStatus.Text = "СТАТУС: УСПЕШНО ЗАВЕРШЕН";
-            else if (result == SimulationResult.Failed) { TxtStatus.Text = $"СТАТУС: ПРОВАЛЕН ({failureMessage})"; TxtStatus.Foreground = System.Windows.Media.Brushes.Red; }
-            else { TxtStatus.Text = "СТАТУС: ПРЕРВАН ПОЛЬЗОВАТЕЛЕМ"; TxtStatus.Foreground = System.Windows.Media.Brushes.Orange; }
-
             var crop = _controller.CropGrowth;
+            if (result == SimulationResult.Completed && crop.AllCellsDead)
+            {
+                TxtStatus.Text = "СТАТУС: ЗАВЕРШЁН, ВСЁ ПОГИБЛО";
+                TxtStatus.Foreground = System.Windows.Media.Brushes.Red;
+            }
+            else if (result == SimulationResult.Completed && crop.DeadCellCount > 0)
+            {
+                TxtStatus.Text = "СТАТУС: ЗАВЕРШЁН";
+                TxtStatus.Foreground = System.Windows.Media.Brushes.DarkOrange;
+            }
+            else if (result == SimulationResult.Completed)
+            {
+                TxtStatus.Text = "СТАТУС: УСПЕШНО ЗАВЕРШЕН";
+            }
+            else if (result == SimulationResult.Failed)
+            {
+                TxtStatus.Text = $"СТАТУС: ПРОВАЛЕН ({failureMessage})";
+                TxtStatus.Foreground = System.Windows.Media.Brushes.Red;
+            }
+            else
+            {
+                TxtStatus.Text = "СТАТУС: ПРЕРВАН ПОЛЬЗОВАТЕЛЕМ";
+                TxtStatus.Foreground = System.Windows.Media.Brushes.Orange;
+            }
+
             TxtYieldPercent.Text = $"Ожидаемая урожайность: {crop.YieldPotential:F1} %";
+            if (crop.DeadCellCount > 0)
+            {
+                double share = 100.0 * crop.DeadCellCount / crop.TotalCellCount;
+                var lines = new List<string>
+                {
+                    $"Погибло: {crop.DeadCellCount} из {crop.TotalCellCount} {CellsWord(crop.TotalCellCount)} ({share:F1} % площади)"
+                };
+                foreach (DeathGroup group in crop.DeathGroups)
+                {
+                    lines.Add($"{group.Cause}, {group.Day}-е сутки, зона ({group.X:F1}; {group.Y:F1}) м — {group.CellCount} {CellsWord(group.CellCount)}");
+                }
+
+                TxtLosses.Text = string.Join("\n", lines);
+                TxtLosses.Visibility = Visibility.Visible;
+            }
             TxtUniformity.Text = $"Индекс равномерности (UI): {crop.UniformityIndex:F1} %";
             TxtGdd.Text = $"Накопленные градусо-дни (GDD): {crop.AccumulatedGdd:F1}";
             TxtStress.Text = $"Стресс (Холод/Жара/Влага/pH): {crop.TotalStressIndex:F2}";
+            if (_controller.ConflictWarnings.Count == 0)
+            {
+                TxtConflicts.Text = "Конфликты осушения и перегрева: не зафиксированы.";
+            }
+            else
+            {
+                TxtConflicts.Text = "Конфликты осушения и перегрева:\n" + string.Join("\n", _controller.ConflictWarnings);
+            }
 
             // Блок 3 (Экономика)
             double totalKwh = _controller.Greenhouse.GetAllActuators().Sum(a => a.TotalEnergyKwh);
@@ -46,7 +92,17 @@ namespace Greenhouse.UI
                 Crop = _controller.ActivePlan?.CropName,
                 Yield = _controller.CropGrowth.YieldPotential,
                 UI = _controller.CropGrowth.UniformityIndex,
-                EnergyKwh = _controller.Greenhouse.GetAllActuators().Sum(a => a.TotalEnergyKwh)
+                DeadCells = _controller.CropGrowth.DeadCellCount,
+                Losses = _controller.CropGrowth.DeathGroups.Select(group => new
+                {
+                    group.Cause,
+                    group.Day,
+                    group.X,
+                    group.Y,
+                    group.CellCount
+                }),
+                EnergyKwh = _controller.Greenhouse.GetAllActuators().Sum(a => a.TotalEnergyKwh),
+                Conflicts = _controller.ConflictWarnings
             };
             string json = JsonSerializer.Serialize(report, new JsonSerializerOptions { WriteIndented = true });
             File.WriteAllText("CycleReport.json", json);
@@ -54,5 +110,27 @@ namespace Greenhouse.UI
         }
 
         private void BtnClose_Click(object sender, RoutedEventArgs e) => Close();
+
+        private static string CellsWord(int count)
+        {
+            int lastTwo = count % 100;
+            int last = count % 10;
+            if (lastTwo is >= 11 and <= 14)
+            {
+                return "клеток";
+            }
+
+            if (last == 1)
+            {
+                return "клетка";
+            }
+
+            if (last is >= 2 and <= 4)
+            {
+                return "клетки";
+            }
+
+            return "клеток";
+        }
     }
 }

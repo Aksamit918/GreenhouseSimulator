@@ -1,13 +1,18 @@
 ﻿using GreenhouseSimulator.Core.Config;
 using GreenhouseSimulator.Core.Models.Environment;
 using GreenhouseSimulator.Core.Models.Plans;
+using System.Linq;
 
 namespace GreenhouseSimulator.Core.Models.Biology
 {
+    public readonly record struct DeathGroup(string Cause, int Day, double X, double Y, int CellCount);
+
     public class CropGrowthModel
     {
         private readonly SimulationConfig _config;
         private readonly double[,] _cellYield;
+        private readonly bool[,] _cellDead;
+        private readonly List<(string Cause, int Day, double X, double Y)> _deaths = new();
         private readonly int _widthCells;
         private readonly int _lengthCells;
 
@@ -18,8 +23,26 @@ namespace GreenhouseSimulator.Core.Models.Biology
         public double HumidityStress { get; private set; }
         public double PhStress { get; private set; }
         public double TotalStressIndex => ColdStress + HeatStress + HumidityStress + PhStress;
-        public bool IsLethal { get; private set; }
-        public string? LethalReason { get; private set; }
+        public int TotalCellCount => _widthCells * _lengthCells;
+        public int DeadCellCount => _deaths.Count;
+        public bool AllCellsDead => DeadCellCount == TotalCellCount;
+        public IReadOnlyList<DeathGroup> DeathGroups
+        {
+            get
+            {
+                return _deaths
+                    .GroupBy(death => (death.Cause, death.Day))
+                    .Select(group => new DeathGroup(
+                        group.Key.Cause,
+                        group.Key.Day,
+                        group.Average(death => death.X),
+                        group.Average(death => death.Y),
+                        group.Count()))
+                    .OrderBy(group => group.Day)
+                    .ThenBy(group => group.Cause, StringComparer.Ordinal)
+                    .ToList();
+            }
+        }
         public double YieldPotential
         {
             get
@@ -50,6 +73,7 @@ namespace GreenhouseSimulator.Core.Models.Biology
             _widthCells = widthCells;
             _lengthCells = lengthCells;
             _cellYield = new double[widthCells, lengthCells];
+            _cellDead = new bool[widthCells, lengthCells];
             Reset();
         }
 
@@ -62,27 +86,23 @@ namespace GreenhouseSimulator.Core.Models.Biology
                 for (int j = 0; j < _lengthCells; j++)
                 {
                     _cellYield[i, j] = 100.0;
+                    _cellDead[i, j] = false;
                 }
             }
 
+            _deaths.Clear();
             AccumulatedGdd = 0.0;
             AccumulatedDli = 0.0;
             ColdStress = 0.0;
             HeatStress = 0.0;
             HumidityStress = 0.0;
             PhStress = 0.0;
-            IsLethal = false;
-            LethalReason = null;
         }
 
         public void Advance(EnvironmentGrid grid, PlanPhase phase, int hourOfDay, int currentDay, double dt)
         {
             ArgumentNullException.ThrowIfNull(grid);
             ArgumentNullException.ThrowIfNull(phase);
-            if (IsLethal)
-            {
-                return;
-            }
 
             double averageTemperature = grid.GetAverageTemperature();
             AccumulatedGdd += Math.Max(0.0, averageTemperature - _config.BaseGrowthTemp) * dt / 24.0;
@@ -95,10 +115,15 @@ namespace GreenhouseSimulator.Core.Models.Biology
             {
                 for (int j = 0; j < _lengthCells; j++)
                 {
-                    ClimateCell cell = grid.GetCell(i, j);
-                    if (TryMarkLethal(grid, cell, i, j, currentDay))
+                    if (_cellDead[i, j])
                     {
-                        return;
+                        continue;
+                    }
+
+                    ClimateCell cell = grid.GetCell(i, j);
+                    if (TryMarkDead(grid, cell, i, j, currentDay))
+                    {
+                        continue;
                     }
 
                     ApplyCorridorStress(i, j, cell.Temperature, tempCorridor, _config.TempStressFactor, dt, totalCells, isTemperature: true);
@@ -108,36 +133,32 @@ namespace GreenhouseSimulator.Core.Models.Biology
             }
         }
 
-        private bool TryMarkLethal(EnvironmentGrid grid, ClimateCell cell, int i, int j, int currentDay)
+        private bool TryMarkDead(EnvironmentGrid grid, ClimateCell cell, int i, int j, int currentDay)
         {
-            (double X, double Y) position = grid.GetCellCenter(i, j);
-            string zone = $"({position.X:F1}; {position.Y:F1}) м";
-
+            string? cause = null;
             if (cell.Temperature <= _config.LethalMinTemp)
             {
-                MarkDead($"Гибель от заморозков на {currentDay}-е сутки в зоне {zone} (T = {cell.Temperature:F1} °C)");
-                return true;
+                cause = "заморозки";
             }
-
-            if (cell.Temperature >= _config.LethalMaxTemp)
+            else if (cell.Temperature >= _config.LethalMaxTemp)
             {
-                MarkDead($"Термический шок на {currentDay}-е сутки в зоне {zone} (T = {cell.Temperature:F1} °C)");
-                return true;
+                cause = "термический шок";
             }
-
-            if (cell.Ph <= _config.LethalMinPh || cell.Ph >= _config.LethalMaxPh)
+            else if (cell.Ph <= _config.LethalMinPh || cell.Ph >= _config.LethalMaxPh)
             {
-                MarkDead($"Химический ожог корней на {currentDay}-е сутки в зоне {zone} (pH = {cell.Ph:F1})");
-                return true;
+                cause = "химический ожог корней";
             }
 
-            return false;
-        }
+            if (cause == null)
+            {
+                return false;
+            }
 
-        private void MarkDead(string reason)
-        {
-            IsLethal = true;
-            LethalReason = reason;
+            (double X, double Y) position = grid.GetCellCenter(i, j);
+            _cellDead[i, j] = true;
+            _cellYield[i, j] = 0.0;
+            _deaths.Add((cause, currentDay, position.X, position.Y));
+            return true;
         }
 
         private void ApplyCorridorStress(

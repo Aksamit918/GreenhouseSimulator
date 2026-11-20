@@ -50,6 +50,7 @@ namespace GreenhouseSimulator.Core.Models.Sensors
         public override void UpdateMeasurement(double newValue)
         {
             CurrentValue = newValue;
+            HasMeasurement = true;
 
             double signedDeviation = newValue - _targetValue;
 

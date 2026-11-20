@@ -9,6 +9,7 @@ namespace GreenhouseSimulator.Core.Models.Sensors
         public SensorType Type { get; }
         public (double X, double Y) Location { get; private set; }
         public double CurrentValue { get; protected set; }
+        public bool HasMeasurement { get; protected set; }
         public double SensorNoiseSigma { get; set; } = 0.05;
 
         public Sensor(string id, SensorType type, (double X, double Y) location, double sensorNoiseSigma = 0.05)
@@ -28,6 +29,7 @@ namespace GreenhouseSimulator.Core.Models.Sensors
         public virtual void ResetMeasurement()
         {
             CurrentValue = 0.0;
+            HasMeasurement = false;
         }
 
         public abstract void UpdateMeasurement(double value);
