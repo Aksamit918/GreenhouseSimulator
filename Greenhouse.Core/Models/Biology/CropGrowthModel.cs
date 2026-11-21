@@ -15,6 +15,8 @@ namespace GreenhouseSimulator.Core.Models.Biology
         private readonly List<(string Cause, int Day, double X, double Y)> _deaths = new();
         private readonly int _widthCells;
         private readonly int _lengthCells;
+        private int _plannedHours = 24;
+        private double _uniformityPenalty;
 
         public double AccumulatedGdd { get; private set; }
         public double AccumulatedDli { get; private set; }
@@ -59,7 +61,7 @@ namespace GreenhouseSimulator.Core.Models.Biology
                 return sum / (_widthCells * _lengthCells);
             }
         }
-        public double UniformityIndex => Math.Clamp(100.0 - _config.UniformityPenaltyFactor * GetYieldStdDev(), 0.0, 100.0);
+        public double UniformityIndex => Math.Clamp(100.0 - _config.UniformityPenaltyFactor * _uniformityPenalty, 0.0, 100.0);
 
         public CropGrowthModel(SimulationConfig config, int widthCells, int lengthCells)
         {
@@ -79,13 +81,18 @@ namespace GreenhouseSimulator.Core.Models.Biology
 
         public double GetCellYield(int i, int j) => _cellYield[i, j];
 
+        public void SetPlannedDuration(int totalDays)
+        {
+            _plannedHours = Math.Max(1, totalDays * 24);
+        }
+
         public void Reset()
         {
             for (int i = 0; i < _widthCells; i++)
             {
                 for (int j = 0; j < _lengthCells; j++)
                 {
-                    _cellYield[i, j] = 100.0;
+                    _cellYield[i, j] = 0.0;
                     _cellDead[i, j] = false;
                 }
             }
@@ -97,6 +104,7 @@ namespace GreenhouseSimulator.Core.Models.Biology
             HeatStress = 0.0;
             HumidityStress = 0.0;
             PhStress = 0.0;
+            _uniformityPenalty = 0.0;
         }
 
         public void Advance(EnvironmentGrid grid, PlanPhase phase, int hourOfDay, int currentDay, double dt)
@@ -104,12 +112,11 @@ namespace GreenhouseSimulator.Core.Models.Biology
             ArgumentNullException.ThrowIfNull(grid);
             ArgumentNullException.ThrowIfNull(phase);
 
-            double averageTemperature = grid.GetAverageTemperature();
-            AccumulatedGdd += Math.Max(0.0, averageTemperature - _config.BaseGrowthTemp) * dt / 24.0;
-            AccumulatedDli += grid.GetAverageLight() * dt;
+            RememberClimate(grid);
 
             ParameterCorridor tempCorridor = phase.GetTempCorridor(hourOfDay);
             int totalCells = _widthCells * _lengthCells;
+            double span = Math.Max(0.1, tempCorridor.TargetValue - _config.BaseGrowthTemp);
 
             for (int i = 0; i < _widthCells; i++)
             {
@@ -126,11 +133,46 @@ namespace GreenhouseSimulator.Core.Models.Biology
                         continue;
                     }
 
+                    if (IsNormal(cell, tempCorridor, phase.HumidityCorridor, phase.PhCorridor))
+                    {
+                        if (cell.Temperature > _config.BaseGrowthTemp)
+                        {
+                            double gdd = (cell.Temperature - _config.BaseGrowthTemp) * dt / 24.0;
+                            AccumulatedGdd += gdd / totalCells;
+                            double growth = 100.0 * ((cell.Temperature - _config.BaseGrowthTemp) / span) * dt / _plannedHours;
+                            _cellYield[i, j] = Math.Min(100.0, _cellYield[i, j] + growth);
+                        }
+
+                        AccumulatedDli += cell.Light * dt / totalCells;
+                        continue;
+                    }
+
+                    if (_cellYield[i, j] <= 0.0)
+                    {
+                        continue;
+                    }
+
                     ApplyCorridorStress(i, j, cell.Temperature, tempCorridor, _config.TempStressFactor, dt, totalCells, isTemperature: true);
                     ApplyCorridorStress(i, j, cell.RelativeHumidity, phase.HumidityCorridor, _config.HumidityStressFactor, dt, totalCells, isTemperature: false, isPh: false);
                     ApplyCorridorStress(i, j, cell.Ph, phase.PhCorridor, _config.PhStressFactor, dt, totalCells, isTemperature: false, isPh: true);
                 }
             }
+        }
+
+        private void RememberClimate(EnvironmentGrid grid)
+        {
+            _uniformityPenalty =
+                grid.GetTemperatureStdDev() * 5.0
+                + grid.GetHumidityStdDev() * 0.4
+                + grid.GetPhStdDev() * 8.0
+                + grid.GetLightStdDev() * 0.015;
+        }
+
+        private static bool IsNormal(ClimateCell cell, ParameterCorridor temperature, ParameterCorridor humidity, ParameterCorridor ph)
+        {
+            return temperature.IsWithinCorridor(cell.Temperature)
+                && humidity.IsWithinCorridor(cell.RelativeHumidity)
+                && ph.IsWithinCorridor(cell.Ph);
         }
 
         private bool TryMarkDead(EnvironmentGrid grid, ClimateCell cell, int i, int j, int currentDay)
@@ -189,9 +231,15 @@ namespace GreenhouseSimulator.Core.Models.Biology
                 return;
             }
 
+            if (_cellYield[i, j] <= 0.0)
+            {
+                return;
+            }
+
             double penalty = factor * excess * excess * dt;
-            _cellYield[i, j] = Math.Max(0.0, _cellYield[i, j] - penalty);
-            double normalized = penalty / totalCells;
+            double applied = Math.Min(penalty, _cellYield[i, j]);
+            _cellYield[i, j] -= applied;
+            double normalized = applied / totalCells;
 
             if (isTemperature)
             {
@@ -214,20 +262,6 @@ namespace GreenhouseSimulator.Core.Models.Biology
             }
 
             HumidityStress += normalized;
-        }
-
-        public double GetYieldStdDev()
-        {
-            double mean = YieldPotential;
-            double sum = 0.0;
-
-            foreach (double cellYield in _cellYield)
-            {
-                double diff = cellYield - mean;
-                sum += diff * diff;
-            }
-
-            return Math.Sqrt(sum / _cellYield.Length);
         }
     }
 }

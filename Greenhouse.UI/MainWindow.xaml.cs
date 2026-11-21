@@ -9,6 +9,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Effects;
+using System.Windows.Media.Imaging;
 using System.Windows.Shapes;
 using System.Windows.Threading;
 
@@ -23,8 +24,9 @@ namespace Greenhouse.UI
         private string? _climateRegime;
         private bool _editingExistingPlan;
 
-        // Для тепловой карты (квадратики)
-        private Rectangle[,] _heatmapRects;
+        private WriteableBitmap? _heatmapBitmap;
+        private Image? _heatmapImage;
+        private byte[]? _heatmapPixels;
 
         public MainWindow()
         {
@@ -59,67 +61,69 @@ namespace Greenhouse.UI
             }
         }
 
-        // --- ПРОСТОЙ РЕНДЕР КВАДРАТИКАМИ (HEATMAP) ---
         private void InitHeatmap()
         {
             if (_controller == null || _controller.Greenhouse == null) return;
-            
+
             int w = _controller.Greenhouse.Grid.WidthCells;
             int h = _controller.Greenhouse.Grid.LengthCells;
-            
-            _heatmapRects = new Rectangle[w, h];
-            HeatmapCanvas.Children.Clear();
 
-            for (int y = 0; y < h; y++)
+            _heatmapBitmap = new WriteableBitmap(w, h, 96, 96, PixelFormats.Bgra32, null);
+            _heatmapPixels = new byte[w * h * 4];
+            _heatmapImage = new Image
             {
-                for (int x = 0; x < w; x++)
-                {
-                    var rect = new Rectangle
-                    {
-                        Opacity = 0.5,
-                        Visibility = Visibility.Collapsed
-                    };
-                    _heatmapRects[x, y] = rect;
-                    HeatmapCanvas.Children.Add(rect);
-                }
-            }
+                Source = _heatmapBitmap,
+                Stretch = Stretch.Fill,
+                IsHitTestVisible = false,
+                Opacity = 0.55,
+                Visibility = Visibility.Collapsed
+            };
+            RenderOptions.SetBitmapScalingMode(_heatmapImage, BitmapScalingMode.Linear);
+            HeatmapCanvas.Children.Clear();
+            HeatmapCanvas.Children.Add(_heatmapImage);
         }
 
         private void UpdateHeatmap()
         {
-            if (_heatmapRects == null) return;
-
-            if (HeatmapComboBox.SelectedIndex == 0)
+            if (_heatmapBitmap == null || _heatmapImage == null || _heatmapPixels == null)
             {
-                HeatmapCanvas.Visibility = Visibility.Collapsed;
                 return;
             }
-            HeatmapCanvas.Visibility = Visibility.Visible;
 
+            if (HeatmapComboBox.SelectedIndex <= 0)
+            {
+                _heatmapImage.Visibility = Visibility.Collapsed;
+                return;
+            }
+
+            _heatmapImage.Visibility = Visibility.Visible;
             int mode = HeatmapComboBox.SelectedIndex;
             var grid = _controller.Greenhouse.Grid;
             int w = grid.WidthCells;
             int h = grid.LengthCells;
+            if (_heatmapBitmap.PixelWidth != w || _heatmapBitmap.PixelHeight != h)
+            {
+                InitHeatmap();
+                if (_heatmapBitmap == null || _heatmapImage == null || _heatmapPixels == null)
+                {
+                    return;
+                }
+            }
 
-            // Чтобы не было ошибки деления на 0 при старте
+            _heatmapImage.Visibility = Visibility.Visible;
+
             double canvasWidth = Math.Max(1, GreenhouseCanvas.ActualWidth);
             double canvasHeight = Math.Max(1, GreenhouseCanvas.ActualHeight);
+            _heatmapImage.Width = canvasWidth;
+            _heatmapImage.Height = canvasHeight;
+            Canvas.SetLeft(_heatmapImage, 0);
+            Canvas.SetTop(_heatmapImage, 0);
 
-            double cellWidth = canvasWidth / w;
-            double cellHeight = canvasHeight / h;
-
+            int stride = w * 4;
             for (int y = 0; y < h; y++)
             {
                 for (int x = 0; x < w; x++)
                 {
-                    var rect = _heatmapRects[x, y];
-                    
-                    rect.Width = cellWidth;
-                    rect.Height = cellHeight;
-                    Canvas.SetLeft(rect, x * cellWidth);
-                    Canvas.SetTop(rect, y * cellHeight);
-                    rect.Visibility = Visibility.Visible;
-
                     var cell = grid.GetCell(x, y);
                     double val = 0, min = 0, max = 1;
                     Color low = Colors.Blue, mid = Colors.Lime, high = Colors.Red;
@@ -129,9 +133,16 @@ namespace Greenhouse.UI
                     else if (mode == 3) { val = cell.Light; min = 0; max = 2000; low = Colors.Black; mid = Colors.Yellow; high = Colors.White; }
                     else if (mode == 4) { val = cell.Ph; min = 4; max = 8; low = Colors.Red; mid = Colors.Lime; high = Colors.Purple; }
 
-                    rect.Fill = new SolidColorBrush(InterpolateColor(val, min, max, low, mid, high));
+                    Color color = InterpolateColor(val, min, max, low, mid, high);
+                    int pixel = (y * w + x) * 4;
+                    _heatmapPixels[pixel] = color.B;
+                    _heatmapPixels[pixel + 1] = color.G;
+                    _heatmapPixels[pixel + 2] = color.R;
+                    _heatmapPixels[pixel + 3] = 255;
                 }
             }
+
+            _heatmapBitmap.WritePixels(new Int32Rect(0, 0, w, h), _heatmapPixels, stride, 0);
         }
 
         private Color InterpolateColor(double val, double min, double max, Color low, Color mid, Color high)

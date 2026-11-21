@@ -3,6 +3,7 @@ using GreenhouseSimulator.Core.Models.Actuators;
 using GreenhouseSimulator.Core.Models.Biology;
 using GreenhouseSimulator.Core.Models.Plans;
 using GreenhouseSimulator.Core.Models.Sensors;
+using GreenhouseSimulator.Core.Models.Statistics;
 using GreenhouseSimulator.Core.Services;
 using System;
 using System.Collections.Generic;
@@ -37,6 +38,7 @@ namespace GreenhouseSimulator.Core.Controllers
         public Greenhouse Greenhouse => _greenhouse;
         public CropGrowthModel CropGrowth => _cropGrowth;
         public GrowingPlan? ActivePlan => _activePlan;
+        public SimulationStatistics Statistics { get; } = new();
         public DateTime? StartDate { get; private set; }
         public int ElapsedHours { get; private set; }
         public int CurrentDay => ElapsedHours / 24 + 1;
@@ -103,12 +105,14 @@ namespace GreenhouseSimulator.Core.Controllers
             }
 
             _conflictWarnings.Clear();
-            _cropGrowth.Reset();
             _greenhouse.ResetCycleState();
             _previousTemperatureTarget = null;
             ResetRegulators();
+            Statistics.Reset();
 
             _activePlan = _repository.LoadPlan(planName);
+            _cropGrowth.SetPlannedDuration(_activePlan.TotalDurationDays);
+            _cropGrowth.Reset();
 
             StartDate = DateTime.Now;
             ElapsedHours = 0;
@@ -131,6 +135,7 @@ namespace GreenhouseSimulator.Core.Controllers
 
             _isRunning = false;
             _isPaused = false;
+            Statistics.FlushOpenDay();
 
             foreach (var actuator in _greenhouse.GetAllActuators())
             {
@@ -183,6 +188,17 @@ namespace GreenhouseSimulator.Core.Controllers
                 RegulateEnvironment(phase);
                 _greenhouse.Tick(phase, HourOfDay);
                 _cropGrowth.Advance(_greenhouse.Grid, phase, HourOfDay, CurrentDay, _greenhouse.Config.HoursPerTick);
+                Statistics.RecordTick(
+                    CurrentDay,
+                    HourOfDay,
+                    _greenhouse.CurrentTemperature,
+                    _greenhouse.CurrentHumidity,
+                    _greenhouse.CurrentPh,
+                    _greenhouse.CurrentLight,
+                    phase.GetTempCorridor(HourOfDay),
+                    phase.HumidityCorridor,
+                    phase.PhCorridor,
+                    HourOfDay < phase.LightDurationHours);
                 ElapsedHours++;
 
                 if (ElapsedHours >= _activePlan.TotalDurationDays * 24)
@@ -582,6 +598,7 @@ namespace GreenhouseSimulator.Core.Controllers
 
         private void HandleSensorAlert(string sensorId, double value)
         {
+            Statistics.RecordAlert();
             AlertTriggered?.Invoke(sensorId, value);
         }
     }
