@@ -278,6 +278,7 @@ namespace Greenhouse.UI
                 "Sensor_Temp" => new ActiveSensor(NextSensorId("temp"), SensorType.Temperature, location),
                 "Sensor_Hum" => new ActiveSensor(NextSensorId("humidity"), SensorType.Humidity, location),
                 "Sensor_Ph" => new ActiveSensor(NextSensorId("ph"), SensorType.Ph, location),
+                "Sensor_Ec" => new ActiveSensor(NextSensorId("ec"), SensorType.Ec, location),
                 "Actuator_Heater" => new Heater(location),
                 "Actuator_AC" => new AirConditioner(location),
                 "Actuator_Humidifier" => new Humidifier(location),
@@ -302,6 +303,7 @@ namespace Greenhouse.UI
                 Sensor { Type: SensorType.Temperature } => "Sensor_Temp",
                 Sensor { Type: SensorType.Humidity } => "Sensor_Hum",
                 Sensor { Type: SensorType.Ph } => "Sensor_Ph",
+                Sensor { Type: SensorType.Ec } => "Sensor_Ec",
                 Heater => "Actuator_Heater",
                 AirConditioner => "Actuator_AC",
                 Humidifier => "Actuator_Humidifier",
@@ -318,6 +320,7 @@ namespace Greenhouse.UI
                 case "Sensor_Temp": return DrawSensor("T°", Colors.LightCyan, Colors.SkyBlue, true);
                 case "Sensor_Hum": return DrawSensor("H%", Color.FromRgb(70, 150, 160), Color.FromRgb(30, 100, 110), false);
                 case "Sensor_Ph": return DrawSensor("pH", Color.FromRgb(200, 100, 100), Color.FromRgb(150, 50, 50), false);
+                case "Sensor_Ec": return DrawSensor("EC", Color.FromRgb(90, 100, 170), Color.FromRgb(40, 50, 110), false);
                 case "Actuator_Heater":
                     Border b = new Border { Width = 90, Height = 30, CornerRadius = new CornerRadius(5), Background = GetGradient(Color.FromRgb(170, 210, 120), Color.FromRgb(120, 160, 70)), Effect = GetShadow() };
                     b.Child = new TextBlock { Text = "Обогрев", FontSize = 11, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Foreground = Brushes.Black };

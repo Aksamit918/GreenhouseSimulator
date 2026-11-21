@@ -15,6 +15,7 @@ namespace GreenhouseSimulator.Core.Models.Environment
         public int LengthCells { get; }
         private ClimateCell[,] _currentCells;
         private ClimateCell[,] _nextCells;
+        private readonly SolutionCircuit _solution;
 
         public EnvironmentGrid(SimulationConfig config)
         {
@@ -23,6 +24,7 @@ namespace GreenhouseSimulator.Core.Models.Environment
             LengthCells = (int)Math.Ceiling(config.Length / config.GridStep);
             _currentCells = new ClimateCell[WidthCells, LengthCells];
             _nextCells = new ClimateCell[WidthCells, LengthCells];
+            _solution = new SolutionCircuit(config, WidthCells);
 
             for (int i = 0; i < WidthCells; i++)
             {
@@ -39,10 +41,14 @@ namespace GreenhouseSimulator.Core.Models.Environment
                     _nextCells[i, j].CopyFrom(_currentCells[i, j]);
                 }
             }
+
+            PublishSolution();
         }
 
         public void Reset()
         {
+            _solution.Reset();
+
             for (int i = 0; i < WidthCells; i++)
             {
                 for (int j = 0; j < LengthCells; j++)
@@ -51,9 +57,12 @@ namespace GreenhouseSimulator.Core.Models.Environment
                     _currentCells[i, j].AbsoluteHumidity = _config.InitialAbsoluteHumidity;
                     _currentCells[i, j].Light = _config.InitialLight;
                     _currentCells[i, j].Ph = _config.InitialPh;
+                    _currentCells[i, j].Ec = _config.InitialEc;
                     _nextCells[i, j].CopyFrom(_currentCells[i, j]);
                 }
             }
+
+            PublishSolution();
         }
 
         public (double X, double Y) GetCellCenter(int i, int j)
@@ -113,7 +122,10 @@ namespace GreenhouseSimulator.Core.Models.Environment
             GetInterpolatedValue(location, cell => cell.Light);
 
         public double GetPhAt((double X, double Y) location) =>
-            GetInterpolatedValue(location, cell => cell.Ph);
+            _solution.PhAt(location.X, location.Y);
+
+        public double GetEcAt((double X, double Y) location) =>
+            _solution.EcAt(location.X, location.Y);
 
         public double GetOutsideTemperature(double hourOfDay)
         {
@@ -126,22 +138,27 @@ namespace GreenhouseSimulator.Core.Models.Environment
 
         public void ApplyWallHeatLoss(double outsideTemp, double dt)
         {
-            for (int i = 0; i < WidthCells; i++)
+            void Cool(ClimateCell cell)
             {
-                var cell1 = _currentCells[i, 0];
-                cell1.Temperature -= _config.WallInsulationCoeff * (cell1.Temperature - outsideTemp) * dt;
-
-                var cell2 = _currentCells[i, LengthCells - 1];
-                cell2.Temperature -= _config.WallInsulationCoeff * (cell2.Temperature - outsideTemp) * dt;
+                cell.Temperature -= _config.WallInsulationCoeff * (cell.Temperature - outsideTemp) * dt;
             }
 
-            for (int j = 0; j < LengthCells; j++)
+            for (int i = 0; i < WidthCells; i++)
             {
-                var cell1 = _currentCells[0, j];
-                cell1.Temperature -= _config.WallInsulationCoeff * (cell1.Temperature - outsideTemp) * dt;
+                Cool(_currentCells[i, 0]);
+                if (LengthCells > 1)
+                {
+                    Cool(_currentCells[i, LengthCells - 1]);
+                }
+            }
 
-                var cell2 = _currentCells[WidthCells - 1, j];
-                cell2.Temperature -= _config.WallInsulationCoeff * (cell2.Temperature - outsideTemp) * dt;
+            for (int j = 1; j < LengthCells - 1; j++)
+            {
+                Cool(_currentCells[0, j]);
+                if (WidthCells > 1)
+                {
+                    Cool(_currentCells[WidthCells - 1, j]);
+                }
             }
         }
 
@@ -234,57 +251,29 @@ namespace GreenhouseSimulator.Core.Models.Environment
 
                     double deltaAh = (_config.BaseTranspirationRate + _config.LightTranspirationFactor * cell.Light) * dt;
                     cell.AbsoluteHumidity += deltaAh;
-                    cell.Ph -= _config.PhDriftRate * dt;
                 }
             }
         }
 
-        public void ApplyHydroponicCirculation(double dt)
+        public void ApplyHydroponicCirculation(double dt, IReadOnlyList<Actuator> actuators)
         {
-            double effectivePhD = Math.Min(_config.PhDiffusionCoeff * dt, _config.MaxDiffusionStepFactor);
-            double effectiveFlow = Math.Min(_config.SolutionFlowSpeed * dt, _config.MaxDiffusionStepFactor);
+            _solution.Advance(dt, actuators);
+            PublishSolution();
+        }
 
+        private void PublishSolution()
+        {
             for (int i = 0; i < WidthCells; i++)
             {
                 for (int j = 0; j < LengthCells; j++)
                 {
-                    _nextCells[i, j].CopyFrom(_currentCells[i, j]);
-
-                    int count = 0;
-                    double phNeighbours = 0.0;
-
-                    if (i > 0)
-                    {
-                        phNeighbours += _currentCells[i - 1, j].Ph;
-                        count++;
-                    }
-                    if (i < WidthCells - 1)
-                    {
-                        phNeighbours += _currentCells[i + 1, j].Ph;
-                        count++;
-                    }
-                    if (j > 0)
-                    {
-                        phNeighbours += _currentCells[i, j - 1].Ph;
-                        count++;
-                    }
-                    if (j < LengthCells - 1)
-                    {
-                        phNeighbours += _currentCells[i, j + 1].Ph;
-                        count++;
-                    }
-
-                    int upstreamI = (i > 0) ? i - 1 : WidthCells - 1;
-
-                    double currentPh = _currentCells[i, j].Ph;
-                    double diffusionDelta = effectivePhD * (phNeighbours / count - currentPh);
-                    double flowDelta = effectiveFlow * (_currentCells[upstreamI, j].Ph - currentPh);
-
-                    _nextCells[i, j].Ph = currentPh + diffusionDelta + flowDelta;
+                    (double X, double Y) center = GetCellCenter(i, j);
+                    _currentCells[i, j].Ph = _solution.PhAt(center.X, center.Y);
+                    _currentCells[i, j].Ec = _solution.EcAt(center.X, center.Y);
+                    _nextCells[i, j].Ph = _currentCells[i, j].Ph;
+                    _nextCells[i, j].Ec = _currentCells[i, j].Ec;
                 }
             }
-
-            (_currentCells, _nextCells) = (_nextCells, _currentCells);
         }
 
         private void EnforceLimits()
@@ -308,7 +297,7 @@ namespace GreenhouseSimulator.Core.Models.Environment
                 ApplyWallHeatLoss(outsideTemp, dt);
                 ApplyActuators(actuators, dt);
                 ApplyDiffusion(dt);
-                ApplyHydroponicCirculation(dt);
+                ApplyHydroponicCirculation(dt, actuators);
                 ApplyPlantMetabolism(dt);
                 EnforceLimits();
             }

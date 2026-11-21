@@ -13,7 +13,7 @@ namespace GreenhouseSimulator.Core.Config
         public double Length { get; set; } = 6.0;
         public double GridStep { get; set; } = 0.5;
         public double WallInsulationCoeff { get; set; } = 0.15;
-        public double DiffusionCoeff { get; set; } = 0.8;
+        public double DiffusionCoeff { get; set; } = 2.4;
         public double MaxDiffusionStepFactor { get; set; } = 0.24;
         public double TMin { get; set; } = 5.0;
         public double TMax { get; set; } = 15.0;
@@ -25,13 +25,16 @@ namespace GreenhouseSimulator.Core.Config
         public double InitialAbsoluteHumidity { get; set; } = 15.5;
         public double InitialLight { get; set; } = 0.0;
         public double InitialPh { get; set; } = 6.0;
+        public double InitialEc { get; set; } = 1.5;
+        public double EcPerPhDose { get; set; } = 0.4;
+        public double EcUptakeRate { get; set; } = 0.02;
         public double MinPh { get; set; } = 0.0;
         public double MaxPh { get; set; } = 14.0;
         public double BaseTranspirationRate { get; set; } = 0.4;
         public double LightTranspirationFactor { get; set; } = 0.002;
         public double PhDriftRate { get; set; } = 0.03;
         public double PhDiffusionCoeff { get; set; } = 0.5;
-        public double SolutionFlowSpeed { get; set; } = 0.4;
+        public double SolutionFlowSpeed { get; set; } = 2.0;
         public double DefaultDoserMlPerHour { get; set; } = 50.0;
         public bool UseGaussianAttenuation { get; set; } = true;
         public double PidKp { get; set; } = 0.4;

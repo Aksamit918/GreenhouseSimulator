@@ -27,6 +27,7 @@ namespace GreenhouseSimulator.Core.Controllers
         private readonly IPlanRepository _repository;
         private readonly CropGrowthModel _cropGrowth;
         private Dictionary<Actuator, PidController> _regulators = new();
+        private readonly Dictionary<Actuator, PidController> _acidRegulators = new();
         private readonly HashSet<ActiveSensor> _boundSensors = new();
         private GrowingPlan? _activePlan;
         private bool _isRunning;
@@ -211,6 +212,15 @@ namespace GreenhouseSimulator.Core.Controllers
 
         private void AssignZonalPower(Actuator actuator, Func<ActiveSensor, double?> errorOf)
         {
+            AssignZonalPower(actuator, errorOf, _regulators, actuator.SetTargetPower);
+        }
+
+        private void AssignZonalPower(
+            Actuator actuator,
+            Func<ActiveSensor, double?> errorOf,
+            Dictionary<Actuator, PidController> regulators,
+            Action<double> apply)
+        {
             double minWeight = _greenhouse.Config.MinActuatorWeight;
             bool useGaussian = _greenhouse.Config.UseGaussianAttenuation;
 
@@ -241,19 +251,19 @@ namespace GreenhouseSimulator.Core.Controllers
 
             if (demandSensor == null)
             {
-                actuator.SetTargetPower(0.0);
+                apply(0.0);
                 return;
             }
 
-            if (!_regulators.TryGetValue(actuator, out PidController? regulator))
+            if (!regulators.TryGetValue(actuator, out PidController? regulator))
             {
                 regulator = new PidController(_greenhouse.Config);
-                _regulators[actuator] = regulator;
+                regulators[actuator] = regulator;
             }
 
             int peers = CountReachablePeers(actuator, demandSensor.Location, minWeight, useGaussian);
             double command = regulator.Compute(demandError, _greenhouse.Config.HoursPerTick) * demandWeight / peers;
-            actuator.SetTargetPower(command);
+            apply(command);
         }
 
         private int CountReachablePeers(Actuator actuator, (double X, double Y) point, double minWeight, bool useGaussian)
@@ -281,6 +291,11 @@ namespace GreenhouseSimulator.Core.Controllers
             foreach (PidController regulator in _regulators.Values)
             { 
                 regulator.Reset(); 
+            }
+
+            foreach (PidController regulator in _acidRegulators.Values)
+            {
+                regulator.Reset();
             }
         }
 
@@ -480,6 +495,15 @@ namespace GreenhouseSimulator.Core.Controllers
 
                             return phase.PhCorridor.TargetValue - sensor.CurrentValue;
                         });
+                        AssignZonalPower(doser, sensor =>
+                        {
+                            if (sensor.Type != SensorType.Ph)
+                            {
+                                return null;
+                            }
+
+                            return sensor.CurrentValue - phase.PhCorridor.TargetValue;
+                        }, _acidRegulators, doser.SetAcidTarget);
                         break;
                 }
             }

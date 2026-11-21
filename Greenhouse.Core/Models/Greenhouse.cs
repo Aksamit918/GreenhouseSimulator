@@ -171,9 +171,13 @@ namespace GreenhouseSimulator.Core.Models
                     sensor.UpdateMeasurement(Grid.GetHumidityAt(sensor.Location) + noise);
                     break;
 
-                case SensorType.Ph:
-                    sensor.UpdateMeasurement(Grid.GetPhAt(sensor.Location) + noise);
-                    break;
+                    case SensorType.Ph:
+                        sensor.UpdateMeasurement(Grid.GetPhAt(sensor.Location) + noise);
+                        break;
+
+                    case SensorType.Ec:
+                        sensor.UpdateMeasurement(Grid.GetEcAt(sensor.Location) + noise);
+                        break;
 
                 case SensorType.Light:
                     sensor.UpdateMeasurement(Grid.GetLightAt(sensor.Location) + noise);

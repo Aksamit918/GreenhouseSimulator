@@ -79,10 +79,11 @@ namespace Greenhouse.UI
             double totalKwh = _controller.Greenhouse.GetAllActuators().Sum(a => a.TotalEnergyKwh);
             double totalWater = _controller.Greenhouse.GetAllActuators().OfType<Humidifier>().Sum(h => h.TotalWaterConsumedLiters);
             double totalReagent = _controller.Greenhouse.GetAllActuators().OfType<FertilizerDoser>().Sum(d => d.TotalReagentConsumedMl);
+            double totalAcid = _controller.Greenhouse.GetAllActuators().OfType<FertilizerDoser>().Sum(d => d.TotalAcidConsumedMl);
 
             TxtPower.Text = $"Потреблено электроэнергии: {totalKwh:F1} кВт*ч";
             TxtWater.Text = $"Расход очищенной воды: {totalWater:F1} л";
-            TxtReagent.Text = $"Расход удобрений (pH): {totalReagent:F1} мл";
+            TxtReagent.Text = $"Расход удобрений (pH): {totalReagent:F1} мл; кислоты: {totalAcid:F1} мл";
         }
 
         private void BtnExport_Click(object sender, RoutedEventArgs e)
@@ -102,6 +103,8 @@ namespace Greenhouse.UI
                     group.CellCount
                 }),
                 EnergyKwh = _controller.Greenhouse.GetAllActuators().Sum(a => a.TotalEnergyKwh),
+                ReagentMl = _controller.Greenhouse.GetAllActuators().OfType<FertilizerDoser>().Sum(d => d.TotalReagentConsumedMl),
+                AcidMl = _controller.Greenhouse.GetAllActuators().OfType<FertilizerDoser>().Sum(d => d.TotalAcidConsumedMl),
                 Conflicts = _controller.ConflictWarnings
             };
             string json = JsonSerializer.Serialize(report, new JsonSerializerOptions { WriteIndented = true });

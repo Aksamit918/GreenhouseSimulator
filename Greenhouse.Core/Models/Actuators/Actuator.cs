@@ -13,7 +13,7 @@ namespace GreenhouseSimulator.Core.Models.Actuators
         public double CooldownTimeHours { get; set; }
         public double PowerConsumptionKw { get; set; }
         public double TotalEnergyKwh { get; private set; }
-        public bool IsOn => TargetPowerRatio > 0.0;
+        public virtual bool IsOn => TargetPowerRatio > 0.0;
 
         protected Actuator(
             (double X, double Y) location,

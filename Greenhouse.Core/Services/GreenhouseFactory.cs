@@ -22,6 +22,7 @@ namespace GreenhouseSimulator.Core.Services
             greenhouse.AddSensor(new ActiveSensor("temp-air", SensorType.Temperature, (2.0, 1.0)));
             greenhouse.AddSensor(new ActiveSensor("humidity-air", SensorType.Humidity, (2.0, 5.0)));
             greenhouse.AddSensor(new ActiveSensor("ph-tank", SensorType.Ph, (8.0, 2.0)));
+            greenhouse.AddSensor(new ActiveSensor("ec-tank", SensorType.Ec, (8.0, 2.5)));
 
             greenhouse.AddActuator(new Heater((1.0, 3.0)));
             greenhouse.AddActuator(new AirConditioner((9.0, 3.0)));
