@@ -41,37 +41,9 @@
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>
-            
-            <TabItem Header="💰 Экономика и ресурсы">
-                <ScrollViewer VerticalScrollBarVisibility="Auto">
-                    <StackPanel Margin="15">
-                        <TextBlock Text="Затраты за цикл:" FontWeight="Bold" FontSize="16" Margin="0,0,0,10"/>
-                        <TextBlock x:Name="TxtPower" Text="Потреблено электроэнергии: 0 кВт*ч" FontSize="14" Margin="0,5" TextWrapping="Wrap"/>
-                        <TextBlock x:Name="TxtWater" Text="Расход воды (увлажнители): 0 л" FontSize="14" Margin="0,5"/>
-                        <TextBlock x:Name="TxtReagent" Text="Расход реагента (удобрения): 0 мл" FontSize="14" Margin="0,5" TextWrapping="Wrap"/>
-                        <TextBlock Text="Рекомендации по зонам" FontWeight="Bold" FontSize="16" Margin="0,16,0,8"/>
-                        <TextBlock x:Name="TxtRecommendations" TextWrapping="Wrap" FontSize="14"/>
-                    </StackPanel>
-                </ScrollViewer>
-            </TabItem>
-
-            <TabItem Header="📈 Графики и карта">
-                <ScrollViewer VerticalScrollBarVisibility="Auto">
-                    <StackPanel Margin="15">
-                        <TextBlock Text="Температура по суткам" FontWeight="Bold" FontSize="16"/>
-                        <TextBlock Text="Зелёная полоса — коридор. Линии: минимум, среднее, максимум." FontSize="12" Foreground="#666" Margin="0,2,0,6"/>
-                        <Canvas x:Name="ChartTemperature" Width="760" Height="170" Margin="0,0,0,16"/>
-                        <TextBlock Text="Влажность по суткам" FontWeight="Bold" FontSize="16"/>
-                        <Canvas x:Name="ChartHumidity" Width="760" Height="170" Margin="0,6,0,16"/>
-                        <TextBlock Text="Тепловая карта на конец цикла" FontWeight="Bold" FontSize="16" Margin="0,4,0,8"/>
-                        <Image x:Name="ReportHeatmap" Width="400" Height="240" Stretch="Fill" HorizontalAlignment="Left"/>
-                    </StackPanel>
-                </ScrollViewer>
-            </TabItem>
         </TabControl>
 
         <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,15,0,0">
-            <Button Content="📥 Экспорт в JSON (REP-05)" Click="BtnExport_Click" Padding="15,7" Background="#607D8B" Foreground="White" Margin="0,0,10,0"/>
             <Button Content="Закрыть" Click="BtnClose_Click" Padding="15,7"/>
         </StackPanel>
     </Grid>
