@@ -19,16 +19,17 @@ namespace GreenhouseSimulator.Core.Services
             var config = new SimulationConfig();
             var greenhouse = new Greenhouse(config);
 
-            greenhouse.AddSensor(new ActiveSensor("temp-air", SensorType.Temperature, (2.0, 1.0)));
-            greenhouse.AddSensor(new ActiveSensor("humidity-air", SensorType.Humidity, (2.0, 5.0)));
-            greenhouse.AddSensor(new ActiveSensor("ph-tank", SensorType.Ph, (8.0, 2.0)));
-            greenhouse.AddSensor(new ActiveSensor("ec-tank", SensorType.Ec, (8.0, 2.5)));
+            // Climate gear shares one zone: a sensor outside an actuator radius is never regulated.
+            greenhouse.AddSensor(new ActiveSensor("temp-air", SensorType.Temperature, (5.5, 5.0)));
+            greenhouse.AddSensor(new ActiveSensor("humidity-air", SensorType.Humidity, (4.0, 1.0)));
+            greenhouse.AddSensor(new ActiveSensor("ph-tank", SensorType.Ph, (7.0, 2.0)));
+            greenhouse.AddSensor(new ActiveSensor("ec-tank", SensorType.Ec, (8.0, 2.0)));
 
-            greenhouse.AddActuator(new Heater((1.0, 3.0)));
-            greenhouse.AddActuator(new AirConditioner((9.0, 3.0)));
-            greenhouse.AddActuator(new Humidifier((1.0, 5.0)));
-            greenhouse.AddActuator(new LightingSystem((5.0, 5.5)));
-            greenhouse.AddActuator(new FertilizerDoser((9.0, 5.0)));
+            greenhouse.AddActuator(new Heater((3.5, 4.0)));
+            greenhouse.AddActuator(new AirConditioner((4.0, 4.0)));
+            greenhouse.AddActuator(new Humidifier((4.0, 3.5)));
+            greenhouse.AddActuator(new LightingSystem((6.0, 5.5)));
+            greenhouse.AddActuator(new FertilizerDoser((7.5, 2.0)));
 
             var repository = new FilePlanRepository(plansDirectory);
             var controller = new GreenhouseController(greenhouse, repository);
