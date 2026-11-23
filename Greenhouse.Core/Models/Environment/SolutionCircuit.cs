@@ -66,6 +66,7 @@ namespace GreenhouseSimulator.Core.Models.Environment
                 _ec[index] += (alkali + acid) * _config.EcPerPhDose;
             }
 
+            MixSupply();
             Advect(dt);
             Mix(dt);
             Clamp();
@@ -90,6 +91,31 @@ namespace GreenhouseSimulator.Core.Models.Environment
 
             Array.Copy(_nextPh, _ph, count);
             Array.Copy(_nextEc, _ec, count);
+        }
+
+        private void MixSupply()
+        {
+            double mix = Math.Clamp(_config.PhSupplyMix, 0.0, 1.0);
+            if (mix <= 0.0 || _supplyCount <= 1)
+            {
+                return;
+            }
+
+            double phMean = 0.0;
+            double ecMean = 0.0;
+            for (int i = 0; i < _supplyCount; i++)
+            {
+                phMean += _ph[i];
+                ecMean += _ec[i];
+            }
+
+            phMean /= _supplyCount;
+            ecMean /= _supplyCount;
+            for (int i = 0; i < _supplyCount; i++)
+            {
+                _ph[i] += mix * (phMean - _ph[i]);
+                _ec[i] += mix * (ecMean - _ec[i]);
+            }
         }
 
         private void Mix(double dt)

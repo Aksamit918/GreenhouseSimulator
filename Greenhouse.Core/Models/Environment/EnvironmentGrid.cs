@@ -216,6 +216,35 @@ namespace GreenhouseSimulator.Core.Models.Environment
             (_currentCells, _nextCells) = (_nextCells, _currentCells);
         }
 
+        public void ApplyAirCirculation()
+        {
+            double temperatureSum = 0.0;
+            double humiditySum = 0.0;
+            int count = WidthCells * LengthCells;
+            for (int i = 0; i < WidthCells; i++)
+            {
+                for (int j = 0; j < LengthCells; j++)
+                {
+                    temperatureSum += _currentCells[i, j].Temperature;
+                    humiditySum += _currentCells[i, j].AbsoluteHumidity;
+                }
+            }
+
+            double meanTemperature = temperatureSum / count;
+            double meanHumidity = humiditySum / count;
+            for (int i = 0; i < WidthCells; i++)
+            {
+                for (int j = 0; j < LengthCells; j++)
+                {
+                    bool perimeter = i == 0 || j == 0 || i == WidthCells - 1 || j == LengthCells - 1;
+                    double mix = perimeter ? _config.PerimeterAirMix : _config.InteriorAirMix;
+                    ClimateCell cell = _currentCells[i, j];
+                    cell.Temperature += mix * (meanTemperature - cell.Temperature);
+                    cell.AbsoluteHumidity += mix * (meanHumidity - cell.AbsoluteHumidity);
+                }
+            }
+        }
+
         public void ApplyActuators(IReadOnlyList<Actuator> actuators, double dt)
         {
             foreach (var actuator in actuators)
@@ -287,19 +316,61 @@ namespace GreenhouseSimulator.Core.Models.Environment
             }
         }
 
+        public void ApplySolar(double hourOfDay, double dt)
+        {
+            double elevation = SolarElevation(hourOfDay);
+            if (elevation <= 0.0)
+            {
+                return;
+            }
+
+            double heat = _config.SolarPeakHeat * elevation * dt;
+            double light = _config.SolarPeakLight * elevation;
+            for (int i = 0; i < WidthCells; i++)
+            {
+                for (int j = 0; j < LengthCells; j++)
+                {
+                    _currentCells[i, j].Temperature += heat;
+                    _currentCells[i, j].Light += light;
+                }
+            }
+        }
+
+        private double SolarElevation(double hourOfDay)
+        {
+            if (_config.SolarDayLengthHours <= 0.0)
+            {
+                return 0.0;
+            }
+
+            double sunrise = _config.SolarNoonHour - _config.SolarDayLengthHours / 2.0;
+            double position = (hourOfDay - sunrise) / _config.SolarDayLengthHours;
+            if (position <= 0.0 || position >= 1.0)
+            {
+                return 0.0;
+            }
+
+            return Math.Sin(Math.PI * position);
+        }
+
+        public void StepSubstep(double hourOfDay, double dt, IReadOnlyList<Actuator> actuators)
+        {
+            ApplyWallHeatLoss(GetOutsideTemperature(hourOfDay), dt);
+            ApplyActuators(actuators, dt);
+            ApplySolar(hourOfDay, dt);
+            ApplyDiffusion(dt);
+            ApplyAirCirculation();
+            ApplyHydroponicCirculation(dt, actuators);
+            ApplyPlantMetabolism(dt);
+            EnforceLimits();
+        }
+
         public void StepPhysics(double hourOfDay, IReadOnlyList<Actuator> actuators)
         {
             double dt = _config.HoursPerTick / _config.SubstepsPerHour;
-            double outsideTemp = 0.0;
             for (int i = 0; i < _config.SubstepsPerHour; i++)
             {
-                outsideTemp = GetOutsideTemperature(hourOfDay + i * dt);
-                ApplyWallHeatLoss(outsideTemp, dt);
-                ApplyActuators(actuators, dt);
-                ApplyDiffusion(dt);
-                ApplyHydroponicCirculation(dt, actuators);
-                ApplyPlantMetabolism(dt);
-                EnforceLimits();
+                StepSubstep(hourOfDay + i * dt, dt, actuators);
             }
         }
 

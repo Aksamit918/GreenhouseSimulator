@@ -15,6 +15,8 @@ namespace GreenhouseSimulator.Core.Config
         public double WallInsulationCoeff { get; set; } = 0.15;
         public double DiffusionCoeff { get; set; } = 2.4;
         public double MaxDiffusionStepFactor { get; set; } = 0.24;
+        public double InteriorAirMix { get; set; } = 0.75;
+        public double PerimeterAirMix { get; set; } = 0.35;
         public double TMin { get; set; } = 5.0;
         public double TMax { get; set; } = 15.0;
         public double HoursPerTick { get; set; } = 1.0;
@@ -30,10 +32,11 @@ namespace GreenhouseSimulator.Core.Config
         public double EcUptakeRate { get; set; } = 0.02;
         public double MinPh { get; set; } = 0.0;
         public double MaxPh { get; set; } = 14.0;
-        public double BaseTranspirationRate { get; set; } = 0.4;
-        public double LightTranspirationFactor { get; set; } = 0.002;
+        public double BaseTranspirationRate { get; set; } = 0.05;
+        public double LightTranspirationFactor { get; set; } = 0.005;
         public double PhDriftRate { get; set; } = 0.03;
         public double PhDiffusionCoeff { get; set; } = 0.5;
+        public double PhSupplyMix { get; set; } = 0.7;
         public double SolutionFlowSpeed { get; set; } = 2.0;
         public double DefaultDoserMlPerHour { get; set; } = 50.0;
         public bool UseGaussianAttenuation { get; set; } = true;
@@ -52,6 +55,14 @@ namespace GreenhouseSimulator.Core.Config
         public double LethalMinPh { get; set; } = 3.0;
         public double LethalMaxPh { get; set; } = 9.0;
         public double UniformityPenaltyFactor { get; set; } = 2.0;
+        public double SolarPeakHeat { get; set; } = 0.8;
+        public double SolarPeakLight { get; set; } = 70.0;
+        public double SolarNoonHour { get; set; } = 13.0;
+        public double SolarDayLengthHours { get; set; } = 12.0;
+        public double GrowthMarginTemp { get; set; } = 4.0;
+        public double GrowthMarginHumidity { get; set; } = 12.0;
+        public double GrowthMarginPh { get; set; } = 0.4;
+        public double LightSaturation { get; set; } = 80.0;
 
         public void SaveToFile(string filePath)
         {

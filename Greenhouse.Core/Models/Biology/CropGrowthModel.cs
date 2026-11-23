@@ -133,18 +133,26 @@ namespace GreenhouseSimulator.Core.Models.Biology
                         continue;
                     }
 
-                    if (IsNormal(cell, tempCorridor, phase.HumidityCorridor, phase.PhCorridor))
-                    {
-                        if (cell.Temperature > _config.BaseGrowthTemp)
-                        {
-                            double gdd = (cell.Temperature - _config.BaseGrowthTemp) * dt / 24.0;
-                            AccumulatedGdd += gdd / totalCells;
-                            double growth = 100.0 * ((cell.Temperature - _config.BaseGrowthTemp) / span) * dt / _plannedHours;
-                            _cellYield[i, j] = Math.Min(100.0, _cellYield[i, j] + growth);
-                        }
+                    double suitTemperature = Suitability(cell.Temperature, tempCorridor, _config.GrowthMarginTemp);
+                    double suitHumidity = Suitability(cell.RelativeHumidity, phase.HumidityCorridor, _config.GrowthMarginHumidity);
+                    double suitPh = Suitability(cell.Ph, phase.PhCorridor, _config.GrowthMarginPh);
+                    double lightFactor = _config.LightSaturation <= 0.0
+                        ? 0.0
+                        : Math.Clamp(cell.Light / _config.LightSaturation, 0.0, 1.0);
 
-                        AccumulatedDli += cell.Light * dt / totalCells;
-                        continue;
+                    if (suitTemperature >= 1.0 && cell.Temperature > _config.BaseGrowthTemp)
+                    {
+                        double gdd = (cell.Temperature - _config.BaseGrowthTemp) * dt / 24.0;
+                        AccumulatedGdd += gdd / totalCells;
+                    }
+
+                    AccumulatedDli += cell.Light * dt / totalCells;
+
+                    double suitability = suitTemperature * suitHumidity * suitPh * lightFactor;
+                    if (suitability > 0.0 && cell.Temperature > _config.BaseGrowthTemp)
+                    {
+                        double growth = 100.0 * ((cell.Temperature - _config.BaseGrowthTemp) / span) * suitability * dt / _plannedHours;
+                        _cellYield[i, j] = Math.Min(100.0, _cellYield[i, j] + growth);
                     }
 
                     if (_cellYield[i, j] <= 0.0)
@@ -152,9 +160,9 @@ namespace GreenhouseSimulator.Core.Models.Biology
                         continue;
                     }
 
-                    ApplyCorridorStress(i, j, cell.Temperature, tempCorridor, _config.TempStressFactor, dt, totalCells, isTemperature: true);
-                    ApplyCorridorStress(i, j, cell.RelativeHumidity, phase.HumidityCorridor, _config.HumidityStressFactor, dt, totalCells, isTemperature: false, isPh: false);
-                    ApplyCorridorStress(i, j, cell.Ph, phase.PhCorridor, _config.PhStressFactor, dt, totalCells, isTemperature: false, isPh: true);
+                    ApplyCorridorStress(i, j, cell.Temperature, tempCorridor, _config.GrowthMarginTemp, _config.TempStressFactor, dt, totalCells, isTemperature: true);
+                    ApplyCorridorStress(i, j, cell.RelativeHumidity, phase.HumidityCorridor, _config.GrowthMarginHumidity, _config.HumidityStressFactor, dt, totalCells, isTemperature: false, isPh: false);
+                    ApplyCorridorStress(i, j, cell.Ph, phase.PhCorridor, _config.GrowthMarginPh, _config.PhStressFactor, dt, totalCells, isTemperature: false, isPh: true);
                 }
             }
         }
@@ -168,11 +176,18 @@ namespace GreenhouseSimulator.Core.Models.Biology
                 + grid.GetLightStdDev() * 0.015;
         }
 
-        private static bool IsNormal(ClimateCell cell, ParameterCorridor temperature, ParameterCorridor humidity, ParameterCorridor ph)
+        private static double Suitability(double actual, ParameterCorridor corridor, double margin)
         {
-            return temperature.IsWithinCorridor(cell.Temperature)
-                && humidity.IsWithinCorridor(cell.RelativeHumidity)
-                && ph.IsWithinCorridor(cell.Ph);
+            if (corridor.IsWithinCorridor(actual))
+            {
+                return 1.0;
+            }
+
+            double span = Math.Max(0.01, margin);
+            double excess = actual < corridor.MinValue
+                ? corridor.MinValue - actual
+                : actual - corridor.MaxValue;
+            return Math.Clamp(1.0 - excess / span, 0.0, 1.0);
         }
 
         private bool TryMarkDead(EnvironmentGrid grid, ClimateCell cell, int i, int j, int currentDay)
@@ -208,22 +223,25 @@ namespace GreenhouseSimulator.Core.Models.Biology
             int j,
             double actual,
             ParameterCorridor corridor,
+            double margin,
             double factor,
             double dt,
             int totalCells,
             bool isTemperature,
             bool isPh = false)
         {
+            double lower = corridor.MinValue - margin;
+            double upper = corridor.MaxValue + margin;
             double excess;
             bool belowMinimum;
-            if (actual < corridor.MinValue)
+            if (actual < lower)
             {
-                excess = corridor.MinValue - actual;
+                excess = lower - actual;
                 belowMinimum = true;
             }
-            else if (actual > corridor.MaxValue)
+            else if (actual > upper)
             {
-                excess = actual - corridor.MaxValue;
+                excess = actual - upper;
                 belowMinimum = false;
             }
             else

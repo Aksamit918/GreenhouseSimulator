@@ -185,8 +185,7 @@ namespace GreenhouseSimulator.Core.Controllers
             {
                 PlanPhase phase = _activePlan.GetPhaseForDay(CurrentDay);
                 ApplySensorThresholds(phase);
-                RegulateEnvironment(phase);
-                _greenhouse.Tick(phase, HourOfDay);
+                _greenhouse.Tick(phase, HourOfDay, () => RegulateEnvironment(phase));
                 _cropGrowth.Advance(_greenhouse.Grid, phase, HourOfDay, CurrentDay, _greenhouse.Config.HoursPerTick);
                 Statistics.RecordTick(
                     CurrentDay,
@@ -277,29 +276,13 @@ namespace GreenhouseSimulator.Core.Controllers
                 regulators[actuator] = regulator;
             }
 
-            int peers = CountReachablePeers(actuator, demandSensor.Location, minWeight, useGaussian);
-            double command = regulator.Compute(demandError, _greenhouse.Config.HoursPerTick) * demandWeight / peers;
+            double command = regulator.Compute(demandError, ControlStepHours()) * demandWeight;
             apply(command);
         }
 
-        private int CountReachablePeers(Actuator actuator, (double X, double Y) point, double minWeight, bool useGaussian)
+        private double ControlStepHours()
         {
-            int count = 0;
-            Type kind = actuator.GetType();
-            foreach (Actuator other in _greenhouse.GetAllActuators())
-            {
-                if (other.GetType() != kind)
-                {
-                    continue;
-                }
-
-                if (other.GetAttenuation(point, useGaussian) > minWeight)
-                {
-                    count++;
-                }
-            }
-
-            return count > 0 ? count : 1;
+            return _greenhouse.Config.HoursPerTick / Math.Max(1, _greenhouse.Config.SubstepsPerHour);
         }
 
         private void ResetRegulators()
@@ -400,7 +383,7 @@ namespace GreenhouseSimulator.Core.Controllers
                 return 0.0;
             }
 
-            double cap = tightest / (conditioner.MaxPower * Math.Max(weightAtTightest, 0.05));
+            double cap = tightest / (conditioner.MaxPower * Math.Max(weightAtTightest, 0.05) * ControlStepHours());
             return Math.Clamp(cap, 0.0, 1.0);
         }
 
@@ -560,7 +543,9 @@ namespace GreenhouseSimulator.Core.Controllers
 
                 double heaterCapacity = heaters.Sum(heater => heater.MaxPower * heater.GetAttenuation(point, useGaussian));
                 double acAtPoint = conditioner.MaxPower * acWeight;
-                double desiredNet = Math.Clamp(temperature.MaxValue - measuredTemp, -acAtPoint, heaterCapacity);
+                double approachHours = 0.25;
+                double desiredRate = (temperature.MaxValue - measuredTemp) / approachHours;
+                double desiredNet = Math.Clamp(desiredRate, -acAtPoint, heaterCapacity);
                 double dryCooling = conditioner.TargetPowerRatio * acAtPoint;
                 double acCooling = Math.Min(dryCooling, Math.Max(0.0, heaterCapacity - desiredNet));
                 if (desiredNet < 0.0)

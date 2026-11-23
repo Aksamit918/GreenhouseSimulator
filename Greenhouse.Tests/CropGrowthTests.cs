@@ -42,7 +42,7 @@ public class CropGrowthTests
     {
         var config = new SimulationConfig { TempStressFactor = 1.0, HumidityStressFactor = 0.0, PhStressFactor = 0.0 };
         var grid = new EnvironmentGrid(config);
-        Fill(grid, 22.0, 70.0, 6.0, 0.0);
+        Fill(grid, 22.0, 70.0, 6.0, 100.0);
         var crop = new CropGrowthModel(config, grid.WidthCells, grid.LengthCells);
         crop.SetPlannedDuration(24);
         crop.Advance(grid, Phase(), 12, 1, 1.0);
@@ -82,6 +82,38 @@ public class CropGrowthTests
 
         Assert.True(even > 90.0);
         Assert.True(crop.UniformityIndex < 40.0);
+    }
+
+    [Fact]
+    public void MildColdSlowsGrowthWithoutErasingBiomass()
+    {
+        var config = new SimulationConfig();
+        var grid = new EnvironmentGrid(config);
+        Fill(grid, 22.0, 70.0, 6.0, 100.0);
+        var crop = new CropGrowthModel(config, grid.WidthCells, grid.LengthCells);
+        crop.SetPlannedDuration(1);
+        crop.Advance(grid, Phase(), 12, 1, 1.0);
+
+        Fill(grid, 19.0, 70.0, 6.0, 100.0);
+        crop.Advance(grid, Phase(), 13, 1, 1.0);
+
+        Assert.True(crop.YieldPotential > 4.0);
+        Assert.Equal(0.0, crop.TotalStressIndex);
+    }
+
+    [Fact]
+    public void DarknessStoresHeatTimeWithoutBiomass()
+    {
+        var config = new SimulationConfig();
+        var grid = new EnvironmentGrid(config);
+        Fill(grid, 22.0, 70.0, 6.0, 0.0);
+        var crop = new CropGrowthModel(config, grid.WidthCells, grid.LengthCells);
+        crop.SetPlannedDuration(1);
+
+        crop.Advance(grid, Phase(), 12, 1, 1.0);
+
+        Assert.True(crop.AccumulatedGdd > 0.5);
+        Assert.Equal(0.0, crop.YieldPotential);
     }
 
     private static PlanPhase Phase()

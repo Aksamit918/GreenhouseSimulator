@@ -128,12 +128,17 @@ namespace GreenhouseSimulator.Core.Models
             }
         }
 
-        public void Tick(PlanPhase phase, int hourOfDay)
+        public void Tick(PlanPhase phase, int hourOfDay, Action? regulate = null)
         {
             ArgumentNullException.ThrowIfNull(phase);
 
-            Grid.StepPhysics(hourOfDay, _actuators);
-            UpdateSensors();
+            double dt = Config.HoursPerTick / Math.Max(1, Config.SubstepsPerHour);
+            for (int step = 0; step < Config.SubstepsPerHour; step++)
+            {
+                regulate?.Invoke();
+                Grid.StepSubstep(hourOfDay + step * dt, dt, _actuators);
+                UpdateSensors();
+            }
         }
 
         public void SampleMissingSensors()

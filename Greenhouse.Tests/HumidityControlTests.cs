@@ -35,8 +35,8 @@ public class HumidityControlTests
     {
         (Heater heater, AirConditioner conditioner) = Regulate(29.5, 90.0);
 
-        Assert.True(conditioner.TargetPowerRatio > 0.5);
-        Assert.Equal(0.5, NetHeat(heater, conditioner), 2);
+        Assert.True(conditioner.TargetPowerRatio > 0.3);
+        Assert.Equal(2.0, NetHeat(heater, conditioner), 2);
     }
 
     [Fact]
@@ -45,7 +45,7 @@ public class HumidityControlTests
         (Heater heater, AirConditioner conditioner) = Regulate(31.0, 70.0);
 
         Assert.Equal(0.0, heater.TargetPowerRatio, 3);
-        Assert.Equal(0.75, conditioner.TargetPowerRatio, 2);
+        Assert.Equal(1.0, conditioner.TargetPowerRatio, 2);
     }
 
     private static double NetHeat(Heater heater, AirConditioner conditioner)
