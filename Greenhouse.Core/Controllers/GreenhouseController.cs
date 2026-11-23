@@ -30,7 +30,6 @@ namespace GreenhouseSimulator.Core.Controllers
         private Dictionary<Actuator, PidController> _regulators = new();
         private readonly Dictionary<Actuator, PidController> _acidRegulators = new();
         private readonly HashSet<ActiveSensor> _boundSensors = new();
-        private const double HumidityHeatLift = 1.5;
         private GrowingPlan? _activePlan;
         private bool _isRunning;
         private bool _isPaused;
@@ -333,7 +332,7 @@ namespace GreenhouseSimulator.Core.Controllers
                 return temperature.TargetValue;
             }
 
-            return Math.Min(temperature.MaxValue, temperature.TargetValue + HumidityHeatLift);
+            return temperature.MaxValue;
         }
 
         private bool HumidityExceedsMaximum(Actuator actuator, ParameterCorridor humidity)
@@ -405,7 +404,7 @@ namespace GreenhouseSimulator.Core.Controllers
             return Math.Clamp(cap, 0.0, 1.0);
         }
 
-        private void RecordUnresolvedHumidityConflicts(PlanPhase phase, ParameterCorridor tempCorridor)
+        private void RecordUnresolvedHumidityConflicts(PlanPhase phase)
         {
             double minWeight = _greenhouse.Config.MinActuatorWeight;
             bool useGaussian = _greenhouse.Config.UseGaussianAttenuation;
@@ -413,12 +412,6 @@ namespace GreenhouseSimulator.Core.Controllers
             foreach (ActiveSensor sensor in _greenhouse.GetAllSensors().OfType<ActiveSensor>())
             {
                 if (sensor.Type != SensorType.Humidity || sensor.CurrentValue <= phase.HumidityCorridor.MaxValue)
-                {
-                    continue;
-                }
-
-                double localTemp = _greenhouse.Grid.GetTemperatureAt(sensor.Location);
-                if (localTemp <= tempCorridor.TargetValue)
                 {
                     continue;
                 }
@@ -432,7 +425,7 @@ namespace GreenhouseSimulator.Core.Controllers
                     continue;
                 }
 
-                string warning = $"День {CurrentDay}, ч. {HourOfDay}: Конфликт в зоне ({sensor.Location.X:F1}; {sensor.Location.Y:F1}) — высокая влажность ({sensor.CurrentValue:F1}%) при температуре {localTemp:F1}°C выше цели, кондиционер в зоне отсутствует.";
+                string warning = $"День {CurrentDay}, ч. {HourOfDay}: Конфликт в зоне ({sensor.Location.X:F1}; {sensor.Location.Y:F1}) — высокая влажность ({sensor.CurrentValue:F1}%), кондиционер в зоне отсутствует.";
                 if (!_conflictWarnings.Contains(warning))
                 {
                     _conflictWarnings.Add(warning);
@@ -452,7 +445,7 @@ namespace GreenhouseSimulator.Core.Controllers
             }
 
             bool lightsOn = HourOfDay < phase.LightDurationHours;
-            RecordUnresolvedHumidityConflicts(phase, tempCorridor);
+            RecordUnresolvedHumidityConflicts(phase);
 
             foreach (var actuator in _greenhouse.GetAllActuators())
             {
@@ -479,21 +472,15 @@ namespace GreenhouseSimulator.Core.Controllers
                                 return sensor.CurrentValue - tempCorridor.TargetValue;
                             }
 
-                            double? dehumidifyError = GetDehumidifyError(sensor, phase.HumidityCorridor);
-                            if (dehumidifyError == null)
-                            {
-                                return null;
-                            }
-
-                            double localTemp = _greenhouse.Grid.GetTemperatureAt(sensor.Location);
-                            if (localTemp <= tempCorridor.TargetValue)
-                            {
-                                return null;
-                            }
-
-                            return dehumidifyError;
+                            return GetDehumidifyError(sensor, phase.HumidityCorridor);
                         }, _regulators, command =>
                         {
+                            if (HumidityExceedsMaximum(conditioner, phase.HumidityCorridor))
+                            {
+                                conditioner.SetTargetPower(command);
+                                return;
+                            }
+
                             conditioner.SetTargetPower(Math.Min(command, CoolingPowerCap(conditioner, tempCorridor)));
                         });
                         break;
@@ -536,6 +523,108 @@ namespace GreenhouseSimulator.Core.Controllers
                         break;
                 }
             }
+
+            BalanceDehumidifyReheat(tempCorridor, phase.HumidityCorridor);
+        }
+
+        private void BalanceDehumidifyReheat(ParameterCorridor temperature, ParameterCorridor humidity)
+        {
+            double minWeight = _greenhouse.Config.MinActuatorWeight;
+            bool useGaussian = _greenhouse.Config.UseGaussianAttenuation;
+            var heaterRatios = new Dictionary<Heater, double>();
+
+            foreach (AirConditioner conditioner in _greenhouse.GetAllActuators().OfType<AirConditioner>())
+            {
+                if (!HumidityExceedsMaximum(conditioner, humidity))
+                {
+                    continue;
+                }
+
+                (double X, double Y) point = ControlPoint(conditioner, out double measuredTemp);
+                double acWeight = conditioner.GetAttenuation(point, useGaussian);
+                if (acWeight <= 0.0)
+                {
+                    acWeight = 1.0;
+                }
+
+                var heaters = _greenhouse.GetAllActuators()
+                    .OfType<Heater>()
+                    .Where(heater => heater.GetAttenuation(point, useGaussian) > minWeight)
+                    .ToList();
+
+                if (heaters.Count == 0)
+                {
+                    conditioner.SetTargetPower(Math.Min(conditioner.TargetPowerRatio, CoolingPowerCap(conditioner, temperature)));
+                    continue;
+                }
+
+                double heaterCapacity = heaters.Sum(heater => heater.MaxPower * heater.GetAttenuation(point, useGaussian));
+                double acAtPoint = conditioner.MaxPower * acWeight;
+                double desiredNet = Math.Clamp(temperature.MaxValue - measuredTemp, -acAtPoint, heaterCapacity);
+                double dryCooling = conditioner.TargetPowerRatio * acAtPoint;
+                double acCooling = Math.Min(dryCooling, Math.Max(0.0, heaterCapacity - desiredNet));
+                if (desiredNet < 0.0)
+                {
+                    acCooling = Math.Max(acCooling, Math.Min(-desiredNet, acAtPoint));
+                }
+
+                double heaterHeating = Math.Clamp(acCooling + desiredNet, 0.0, heaterCapacity);
+                conditioner.SetTargetPower(acAtPoint > 0.0 ? acCooling / acAtPoint : 0.0);
+
+                double ratio = heaterCapacity > 0.0 ? heaterHeating / heaterCapacity : 0.0;
+                foreach (Heater heater in heaters)
+                {
+                    heaterRatios[heater] = heaterRatios.TryGetValue(heater, out double already) ? already + ratio : ratio;
+                }
+
+                if (_regulators.TryGetValue(conditioner, out PidController? conditionerPid))
+                {
+                    conditionerPid.Reset();
+                }
+            }
+
+            foreach (KeyValuePair<Heater, double> pair in heaterRatios)
+            {
+                pair.Key.SetTargetPower(pair.Value);
+                if (_regulators.TryGetValue(pair.Key, out PidController? heaterPid))
+                {
+                    heaterPid.Reset();
+                }
+            }
+        }
+
+        private (double X, double Y) ControlPoint(AirConditioner conditioner, out double temperature)
+        {
+            double minWeight = _greenhouse.Config.MinActuatorWeight;
+            bool useGaussian = _greenhouse.Config.UseGaussianAttenuation;
+            ActiveSensor? closest = null;
+            double bestWeight = minWeight;
+
+            foreach (ActiveSensor sensor in _greenhouse.GetAllSensors().OfType<ActiveSensor>())
+            {
+                if (sensor.Type != SensorType.Temperature || !sensor.HasMeasurement)
+                {
+                    continue;
+                }
+
+                double weight = conditioner.GetAttenuation(sensor.Location, useGaussian);
+                if (weight <= bestWeight)
+                {
+                    continue;
+                }
+
+                bestWeight = weight;
+                closest = sensor;
+            }
+
+            if (closest != null)
+            {
+                temperature = closest.CurrentValue;
+                return closest.Location;
+            }
+
+            temperature = _greenhouse.Grid.GetTemperatureAt(conditioner.Location);
+            return conditioner.Location;
         }
 
         private void ApplySensorThresholds(PlanPhase phase)

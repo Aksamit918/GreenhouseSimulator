@@ -12,21 +12,45 @@ namespace Greenhouse.Tests;
 public class HumidityControlTests
 {
     [Fact]
-    public void WetAirBelowTargetHeatsAndDoesNotCool()
+    public void WetAirFarBelowTheCeilingHeatsBeforeDrying()
     {
         (Heater heater, AirConditioner conditioner) = Regulate(21.0, 90.0);
 
-        Assert.True(heater.TargetPowerRatio > 0.5);
-        Assert.Equal(0.0, conditioner.TargetPowerRatio);
+        Assert.Equal(1.0, heater.TargetPowerRatio, 3);
+        Assert.Equal(0.0, conditioner.TargetPowerRatio, 3);
     }
 
     [Fact]
-    public void WetAirAboveTargetCoolsOnlyDownToTheSetpoint()
+    public void WetAirAtTheCeilingDriesAndReheats()
     {
-        (Heater heater, AirConditioner conditioner) = Regulate(29.0, 90.0);
+        (Heater heater, AirConditioner conditioner) = Regulate(30.0, 90.0);
 
-        Assert.True(heater.TargetPowerRatio > 0.0);
-        Assert.InRange(conditioner.TargetPowerRatio, 0.05, 0.25);
+        Assert.Equal(1.0, heater.TargetPowerRatio, 3);
+        Assert.Equal(1.0, conditioner.TargetPowerRatio, 3);
+        Assert.Equal(0.0, NetHeat(heater, conditioner), 2);
+    }
+
+    [Fact]
+    public void WetAirJustBelowTheCeilingKeepsALittleHeatWhileDrying()
+    {
+        (Heater heater, AirConditioner conditioner) = Regulate(29.5, 90.0);
+
+        Assert.True(conditioner.TargetPowerRatio > 0.5);
+        Assert.Equal(0.5, NetHeat(heater, conditioner), 2);
+    }
+
+    [Fact]
+    public void DryHotAirCoolsWithoutReheat()
+    {
+        (Heater heater, AirConditioner conditioner) = Regulate(31.0, 70.0);
+
+        Assert.Equal(0.0, heater.TargetPowerRatio, 3);
+        Assert.Equal(0.75, conditioner.TargetPowerRatio, 2);
+    }
+
+    private static double NetHeat(Heater heater, AirConditioner conditioner)
+    {
+        return heater.TargetPowerRatio * heater.MaxPower - conditioner.TargetPowerRatio * conditioner.MaxPower;
     }
 
     private static (Heater heater, AirConditioner conditioner) Regulate(double temperature, double relativeHumidity)
