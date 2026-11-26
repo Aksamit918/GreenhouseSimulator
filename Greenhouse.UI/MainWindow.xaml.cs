@@ -9,6 +9,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Effects;
 using System.Windows.Media.Imaging;
@@ -59,6 +60,12 @@ namespace Greenhouse.UI
         private double _rampScale;
         private readonly Stopwatch _blendClock = new Stopwatch();
         private bool _blending;
+        private readonly double[] _legendStops = new double[7];
+        private int _legendMode;
+        private int _legendCount;
+        private double _legendLow = double.PositiveInfinity;
+        private double _legendHigh = double.NegativeInfinity;
+        private (int X, int Y)? _probedCell;
 
         private readonly Dictionary<object, DeviceVisual> _deviceVisuals = new Dictionary<object, DeviceVisual>();
         private static readonly DropShadowEffect DeviceShadow = Frozen(new DropShadowEffect { Color = Colors.Black, Direction = 315, ShadowDepth = 4, BlurRadius = 5, Opacity = 0.6 });
@@ -152,6 +159,7 @@ namespace Greenhouse.UI
             {
                 StopBlend();
                 _heatmapMode = 0;
+                LegendPanel.Visibility = Visibility.Collapsed;
                 if (_heatmapImage != null)
                 {
                     _heatmapImage.Visibility = Visibility.Collapsed;
@@ -165,8 +173,10 @@ namespace Greenhouse.UI
             _heatmapImage.Width = fieldWidth;
             _heatmapImage.Height = fieldHeight;
 
-            BuildRampTable(BuildRamp(mode, _rampStops, _rampColors));
+            int rampCount = BuildRamp(mode, _rampStops, _rampColors);
+            BuildRampTable(rampCount);
             SampleLayer(mode, grid);
+            UpdateLegend(mode, rampCount);
 
             if (resized || mode != _heatmapMode)
             {
@@ -290,6 +300,134 @@ namespace Greenhouse.UI
                 _rampTable[k] = (255 << 24) | (color.R << 16) | (color.G << 8) | color.B;
             }
         }
+
+        private void UpdateLegend(int mode, int count)
+        {
+            LegendPanel.Visibility = Visibility.Visible;
+            bool scaleChanged = mode != _legendMode || count != _legendCount;
+            for (int k = 0; k < count && !scaleChanged; k++)
+            {
+                scaleChanged = Math.Abs(_legendStops[k] - _rampStops[k]) > 1e-9;
+            }
+
+            if (scaleChanged)
+            {
+                _legendMode = mode;
+                _legendCount = count;
+                Array.Copy(_rampStops, _legendStops, count);
+                TxtLegendTitle.Text = LayerTitle(mode);
+
+                double first = _rampStops[0];
+                double span = Math.Max(1e-6, _rampStops[count - 1] - first);
+                var gradient = new LinearGradientBrush { StartPoint = new Point(0, 0.5), EndPoint = new Point(1, 0.5) };
+                for (int k = 0; k < count; k++)
+                {
+                    gradient.GradientStops.Add(new GradientStop(_rampColors[k], (_rampStops[k] - first) / span));
+                }
+
+                gradient.Freeze();
+                LegendBar.Fill = gradient;
+                LayoutLegendTicks();
+            }
+
+            double low = double.PositiveInfinity;
+            double high = double.NegativeInfinity;
+            double sum = 0.0;
+            foreach (double value in _blendTo)
+            {
+                low = Math.Min(low, value);
+                high = Math.Max(high, value);
+                sum += value;
+            }
+
+            _legendLow = low;
+            _legendHigh = high;
+            string unit = LayerUnit(mode);
+            TxtLegendRange.Text = $"В зале: {FormatLayer(mode, low)}…{FormatLayer(mode, high)}{unit}, среднее {FormatLayer(mode, sum / Math.Max(1, _blendTo.Length))}{unit}";
+            PlaceLegendRange();
+        }
+
+        private void LegendTicks_SizeChanged(object sender, SizeChangedEventArgs e)
+        {
+            LayoutLegendTicks();
+        }
+
+        private void LayoutLegendTicks()
+        {
+            LegendTicks.Children.Clear();
+            double width = LegendTicks.ActualWidth;
+            if (_legendCount < 2 || width <= 0)
+            {
+                return;
+            }
+
+            double first = _legendStops[0];
+            double span = Math.Max(1e-6, _legendStops[_legendCount - 1] - first);
+            bool corridorScale = _legendMode is 1 or 2 or 4;
+            int corridorFirst = _legendMode == 1 ? 2 : 1;
+            for (int k = 0; k < _legendCount; k++)
+            {
+                double x = (_legendStops[k] - first) / span * width;
+                bool corridor = corridorScale && k >= corridorFirst && k <= corridorFirst + 2;
+                var tick = new Rectangle { Width = 1, Height = 4, Fill = Brushes.DimGray };
+                Canvas.SetLeft(tick, x - 0.5);
+                LegendTicks.Children.Add(tick);
+
+                var label = new TextBlock
+                {
+                    Text = FormatLayer(_legendMode, _legendStops[k]),
+                    FontSize = 10.5,
+                    FontWeight = corridor ? FontWeights.SemiBold : FontWeights.Normal,
+                    Foreground = corridor ? Brushes.Black : Brushes.DimGray
+                };
+                label.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+                Canvas.SetLeft(label, Math.Clamp(x - label.DesiredSize.Width / 2, 0, Math.Max(0, width - label.DesiredSize.Width)));
+                Canvas.SetTop(label, 4);
+                LegendTicks.Children.Add(label);
+            }
+
+            PlaceLegendRange();
+        }
+
+        private void PlaceLegendRange()
+        {
+            double width = LegendBar.ActualWidth;
+            if (_legendCount < 2 || width <= 0 || double.IsInfinity(_legendLow))
+            {
+                LegendRange.Visibility = Visibility.Collapsed;
+                return;
+            }
+
+            double first = _legendStops[0];
+            double span = Math.Max(1e-6, _legendStops[_legendCount - 1] - first);
+            double left = Math.Clamp((_legendLow - first) / span, 0.0, 1.0) * width;
+            double right = Math.Clamp((_legendHigh - first) / span, 0.0, 1.0) * width;
+            LegendRange.Visibility = Visibility.Visible;
+            LegendRange.Width = Math.Max(3.0, right - left);
+            Canvas.SetLeft(LegendRange, Math.Min(left, width - LegendRange.Width));
+        }
+
+        private static string LayerTitle(int mode) => mode switch
+        {
+            1 => "Температура",
+            2 => "Влажность",
+            3 => "Освещённость",
+            _ => "pH раствора"
+        };
+
+        private static string LayerUnit(int mode) => mode switch
+        {
+            1 => " °C",
+            2 => " %",
+            _ => ""
+        };
+
+        private static string FormatLayer(int mode, double value) => mode switch
+        {
+            1 => value.ToString("0.0"),
+            2 or 3 => value.ToString("0"),
+            _ => value.ToString("0.00")
+        };
 
         private bool EnsureHeatmapSurface(int cellsX, int cellsY)
         {
@@ -415,23 +553,23 @@ namespace Greenhouse.UI
 
             if (mode == 2)
             {
-                stops[0] = 35;
-                stops[1] = 58;
-                stops[2] = 75;
-                stops[3] = 92;
+                ParameterCorridor humidity = ActivePhase()?.HumidityCorridor ?? new ParameterCorridor(60, 80, 70);
+                SetCorridorStops(stops, humidity, 25, 12, 0.5);
                 colors[0] = Color.FromRgb(224, 190, 86);
-                colors[1] = Color.FromRgb(196, 212, 168);
-                colors[2] = Color.FromRgb(60, 178, 216);
-                colors[3] = Color.FromRgb(20, 64, 190);
-                return 4;
+                colors[1] = Color.FromRgb(214, 214, 150);
+                colors[2] = Color.FromRgb(120, 200, 200);
+                colors[3] = Color.FromRgb(40, 150, 220);
+                colors[4] = Color.FromRgb(20, 50, 170);
+                return 5;
             }
 
             if (mode == 3)
             {
+                double saturation = Math.Max(20.0, _controller.Greenhouse.Config.LightSaturation);
                 stops[0] = 0;
-                stops[1] = 15;
-                stops[2] = 60;
-                stops[3] = 120;
+                stops[1] = saturation * 0.2;
+                stops[2] = saturation;
+                stops[3] = saturation * 1.6;
                 colors[0] = Color.FromRgb(30, 36, 54);
                 colors[1] = Color.FromRgb(78, 88, 112);
                 colors[2] = Color.FromRgb(255, 210, 70);
@@ -439,17 +577,27 @@ namespace Greenhouse.UI
                 return 4;
             }
 
-            stops[0] = 4.0;
-            stops[1] = 5.2;
-            stops[2] = 7.0;
-            stops[3] = 8.5;
-            stops[4] = 10.0;
+            ParameterCorridor ph = ActivePhase()?.PhCorridor ?? new ParameterCorridor(5.5, 6.5, 6.0);
+            SetCorridorStops(stops, ph, 1.0, 1.0, 0.01);
             colors[0] = Color.FromRgb(206, 48, 28);
             colors[1] = Color.FromRgb(238, 142, 40);
             colors[2] = Color.FromRgb(64, 172, 82);
             colors[3] = Color.FromRgb(142, 72, 190);
             colors[4] = Color.FromRgb(42, 70, 200);
             return 5;
+        }
+
+        private static void SetCorridorStops(double[] stops, ParameterCorridor corridor, double below, double above, double gap)
+        {
+            stops[0] = corridor.MinValue - below;
+            stops[1] = corridor.MinValue;
+            stops[2] = corridor.TargetValue;
+            stops[3] = corridor.MaxValue;
+            stops[4] = corridor.MaxValue + above;
+            for (int i = 1; i < 5; i++)
+            {
+                stops[i] = Math.Max(stops[i], stops[i - 1] + gap);
+            }
         }
 
         // Green spans the plan corridor; blue and red open up a few degrees beyond it, so a device plume shows without repainting the hall.
@@ -490,14 +638,20 @@ namespace Greenhouse.UI
 
         private ParameterCorridor? ActiveTemperatureCorridor()
         {
+            (int _, int hour) = AirClock();
+            return ActivePhase()?.GetTempCorridor(hour);
+        }
+
+        private PlanPhase? ActivePhase()
+        {
             GrowingPlan? plan = _controller.ActivePlan;
-            (int day, int hour) = AirClock();
+            (int day, int _) = AirClock();
             if (plan == null || day > plan.TotalDurationDays)
             {
                 return null;
             }
 
-            return plan.GetPhaseForDay(day).GetTempCorridor(hour);
+            return plan.GetPhaseForDay(day);
         }
 
         private (int day, int hour) AirClock()
@@ -891,6 +1045,54 @@ namespace Greenhouse.UI
             FitPlanToHall();
         }
 
+        private const string CellProbeHint = "Наведите курсор на клетку, чтобы увидеть её показатели";
+
+        private void GreenhouseCanvas_MouseMove(object sender, MouseEventArgs e)
+        {
+            (int X, int Y)? cell = CellUnder(e.GetPosition(GreenhouseCanvas));
+            if (cell == _probedCell)
+            {
+                return;
+            }
+
+            _probedCell = cell;
+            UpdateCellProbe();
+        }
+
+        private void GreenhouseCanvas_MouseLeave(object sender, MouseEventArgs e)
+        {
+            _probedCell = null;
+            UpdateCellProbe();
+        }
+
+        private (int X, int Y)? CellUnder(Point point)
+        {
+            if (_gridCellsX <= 0 || _gridCellsY <= 0 || _gridFieldWidth <= 0 || _gridFieldHeight <= 0 || point.X < 0 || point.Y < 0)
+            {
+                return null;
+            }
+
+            int i = (int)(point.X / (_gridFieldWidth / _gridCellsX));
+            int j = (int)(point.Y / (_gridFieldHeight / _gridCellsY));
+            return i < _gridCellsX && j < _gridCellsY ? (i, j) : null;
+        }
+
+        private void UpdateCellProbe()
+        {
+            EnvironmentGrid? grid = _controller?.Greenhouse?.Grid;
+            if (grid == null || _probedCell is not { } probe || probe.X >= grid.WidthCells || probe.Y >= grid.LengthCells)
+            {
+                TxtCellProbe.Text = CellProbeHint;
+                return;
+            }
+
+            ClimateCell cell = grid.GetCell(probe.X, probe.Y);
+            double step = _controller!.Greenhouse.Config.GridStep;
+            TxtCellProbe.Text =
+                $"Клетка x {probe.X * step:0.0}–{(probe.X + 1) * step:0.0} м, y {probe.Y * step:0.0}–{(probe.Y + 1) * step:0.0} м:  " +
+                $"{cell.Temperature:0.0} °C · {cell.RelativeHumidity:0} % · свет {cell.Light:0} · pH {cell.Ph:0.00} · EC {cell.Ec:0.00}";
+        }
+
         private void FitPlanToHall()
         {
             var hall = _controller?.Greenhouse;
@@ -927,6 +1129,8 @@ namespace Greenhouse.UI
 
                 TxtStatus.Text = "Статус: ошибка теплокарты — " + ex.Message;
             }
+
+            UpdateCellProbe();
 
             if (_controller.IsRunning)
             {
