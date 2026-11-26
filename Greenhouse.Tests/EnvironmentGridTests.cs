@@ -52,7 +52,7 @@ public class EnvironmentGridTests
     [Fact]
     public void NightTranspirationIsOnlyTheDarkResidual()
     {
-        var config = new SimulationConfig();
+        var config = new SimulationConfig { AirExchangeRate = 0.0 };
         var grid = new EnvironmentGrid(config);
         double before = grid.GetCell(5, 3).AbsoluteHumidity;
 
@@ -60,6 +60,21 @@ public class EnvironmentGridTests
 
         double gain = grid.GetCell(5, 3).AbsoluteHumidity - before;
         Assert.InRange(gain, 0.02, 0.12);
+    }
+
+    [Fact]
+    public void LeaksSwapHallAirForOutsideAir()
+    {
+        var config = new SimulationConfig { AirExchangeRate = 0.1 };
+        var grid = new EnvironmentGrid(config);
+        double humidity = grid.GetCell(5, 3).AbsoluteHumidity;
+        double temperature = grid.GetCell(5, 3).Temperature;
+        double outsideHumidity = Psychrometrics.GetAbsoluteHumidity(10.0, config.OutsideRelativeHumidity);
+
+        grid.ApplyAirExchange(10.0, 1.0);
+
+        Assert.Equal(humidity + 0.1 * (outsideHumidity - humidity), grid.GetCell(5, 3).AbsoluteHumidity, 6);
+        Assert.Equal(temperature + 0.1 * (10.0 - temperature), grid.GetCell(5, 3).Temperature, 6);
     }
 
     [Fact]
@@ -76,8 +91,8 @@ public class EnvironmentGridTests
     [Fact]
     public void RunningHeaterWarmsItsSurroundingsMostWithoutAddingHeat()
     {
-        var plumeGrid = new EnvironmentGrid(new SimulationConfig { WallInsulationCoeff = 0.0 });
-        var mixedGrid = new EnvironmentGrid(new SimulationConfig { WallInsulationCoeff = 0.0, PlumeResidenceHours = 0.0 });
+        var plumeGrid = new EnvironmentGrid(new SimulationConfig { WallInsulationCoeff = 0.0, AirExchangeRate = 0.0 });
+        var mixedGrid = new EnvironmentGrid(new SimulationConfig { WallInsulationCoeff = 0.0, AirExchangeRate = 0.0, PlumeResidenceHours = 0.0 });
         var plumeHeater = new Heater((5, 3));
         var mixedHeater = new Heater((5, 3));
         plumeHeater.TurnOn();

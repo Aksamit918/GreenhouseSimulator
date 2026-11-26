@@ -24,6 +24,8 @@ namespace GreenhouseSimulator.Core.Config
         public double HoursPerTick { get; set; } = 1.0;
         public int SubstepsPerHour { get; set; } = 12;
         public double OutsideMinTempHour { get; set; } = 4.0;
+        public double OutsideRelativeHumidity { get; set; } = 80.0;
+        public double AirExchangeRate { get; set; } = 0.03;
         public int RandomSeed { get; set; } = 42;
         public double InitialTemperature { get; set; } = 22.0;
         public double InitialAbsoluteHumidity { get; set; } = 15.5;

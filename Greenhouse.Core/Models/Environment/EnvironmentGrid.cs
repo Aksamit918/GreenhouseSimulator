@@ -142,6 +142,27 @@ namespace GreenhouseSimulator.Core.Models.Environment
             return t_avg - A * Math.Cos((hourOfDay - h_min) * (Math.PI / 12.0));
         }
 
+        // Leaks swap a share of the hall air for outside air; this is the only way water leaves besides the AC.
+        public void ApplyAirExchange(double outsideTemp, double dt)
+        {
+            double share = Math.Clamp(_config.AirExchangeRate * dt, 0.0, 1.0);
+            if (share <= 0.0)
+            {
+                return;
+            }
+
+            double outsideHumidity = Psychrometrics.GetAbsoluteHumidity(outsideTemp, _config.OutsideRelativeHumidity);
+            for (int i = 0; i < WidthCells; i++)
+            {
+                for (int j = 0; j < LengthCells; j++)
+                {
+                    var cell = _currentCells[i, j];
+                    cell.Temperature += share * (outsideTemp - cell.Temperature);
+                    cell.AbsoluteHumidity += share * (outsideHumidity - cell.AbsoluteHumidity);
+                }
+            }
+        }
+
         public void ApplyWallHeatLoss(double outsideTemp, double dt)
         {
             void Cool(ClimateCell cell)
@@ -443,7 +464,9 @@ namespace GreenhouseSimulator.Core.Models.Environment
         public void StepSubstep(double hourOfDay, double dt, IReadOnlyList<Actuator> actuators)
         {
             WithdrawPlumes();
-            ApplyWallHeatLoss(GetOutsideTemperature(hourOfDay), dt);
+            double outsideTemp = GetOutsideTemperature(hourOfDay);
+            ApplyWallHeatLoss(outsideTemp, dt);
+            ApplyAirExchange(outsideTemp, dt);
             ApplyActuators(actuators, dt);
             ApplySolar(hourOfDay, dt);
             ApplyDiffusion(dt);
