@@ -298,6 +298,8 @@ namespace GreenhouseSimulator.Core.Controllers
             }
         }
 
+        private const double HumidityBlendBand = 5.0;
+
         private double? GetDehumidifyError(ActiveSensor sensor, ParameterCorridor humidity)
         {
             if (sensor.Type != SensorType.Humidity || sensor.CurrentValue <= humidity.MaxValue)
@@ -305,23 +307,21 @@ namespace GreenhouseSimulator.Core.Controllers
                 return null;
             }
 
-            return (sensor.CurrentValue - humidity.TargetValue) / _greenhouse.Config.HumidityPercentPerDegree;
+            double wetness = Math.Clamp((sensor.CurrentValue - humidity.MaxValue) / HumidityBlendBand, 0.0, 1.0);
+            return wetness * (sensor.CurrentValue - humidity.TargetValue) / _greenhouse.Config.HumidityPercentPerDegree;
         }
 
         private double HeatingTarget(Heater heater, ParameterCorridor temperature, ParameterCorridor humidity)
         {
-            if (!HumidityExceedsMaximum(heater, humidity))
-            {
-                return temperature.TargetValue;
-            }
-
-            return temperature.MaxValue;
+            double wetness = HumidityExcess(heater, humidity);
+            return temperature.TargetValue + wetness * (temperature.MaxValue - temperature.TargetValue);
         }
 
-        private bool HumidityExceedsMaximum(Actuator actuator, ParameterCorridor humidity)
+        private double HumidityExcess(Actuator actuator, ParameterCorridor humidity)
         {
             double minWeight = _greenhouse.Config.MinActuatorWeight;
             bool useGaussian = _greenhouse.Config.UseGaussianAttenuation;
+            double excess = 0.0;
             foreach (ActiveSensor sensor in _greenhouse.GetAllSensors().OfType<ActiveSensor>())
             {
                 if (sensor.Type != SensorType.Humidity || !sensor.HasMeasurement)
@@ -334,13 +334,15 @@ namespace GreenhouseSimulator.Core.Controllers
                     continue;
                 }
 
-                if (sensor.CurrentValue > humidity.MaxValue)
-                {
-                    return true;
-                }
+                excess = Math.Max(excess, (sensor.CurrentValue - humidity.MaxValue) / HumidityBlendBand);
             }
 
-            return false;
+            return Math.Clamp(excess, 0.0, 1.0);
+        }
+
+        private bool HumidityExceedsMaximum(Actuator actuator, ParameterCorridor humidity)
+        {
+            return HumidityExcess(actuator, humidity) >= 1.0;
         }
 
         private double CoolingPowerCap(AirConditioner conditioner, ParameterCorridor temperature)
@@ -515,10 +517,12 @@ namespace GreenhouseSimulator.Core.Controllers
             double minWeight = _greenhouse.Config.MinActuatorWeight;
             bool useGaussian = _greenhouse.Config.UseGaussianAttenuation;
             var heaterRatios = new Dictionary<Heater, double>();
+            var heaterWetness = new Dictionary<Heater, double>();
 
             foreach (AirConditioner conditioner in _greenhouse.GetAllActuators().OfType<AirConditioner>())
             {
-                if (!HumidityExceedsMaximum(conditioner, humidity))
+                double wetness = HumidityExcess(conditioner, humidity);
+                if (wetness <= 0.0)
                 {
                     continue;
                 }
@@ -537,7 +541,8 @@ namespace GreenhouseSimulator.Core.Controllers
 
                 if (heaters.Count == 0)
                 {
-                    conditioner.SetTargetPower(Math.Min(conditioner.TargetPowerRatio, CoolingPowerCap(conditioner, temperature)));
+                    double capped = Math.Min(conditioner.TargetPowerRatio, CoolingPowerCap(conditioner, temperature));
+                    conditioner.SetTargetPower(Lerp(conditioner.TargetPowerRatio, capped, wetness));
                     continue;
                 }
 
@@ -554,28 +559,27 @@ namespace GreenhouseSimulator.Core.Controllers
                 }
 
                 double heaterHeating = Math.Clamp(acCooling + desiredNet, 0.0, heaterCapacity);
-                conditioner.SetTargetPower(acAtPoint > 0.0 ? acCooling / acAtPoint : 0.0);
+                double balancedAc = acAtPoint > 0.0 ? acCooling / acAtPoint : 0.0;
+                conditioner.SetTargetPower(Lerp(conditioner.TargetPowerRatio, balancedAc, wetness));
 
                 double ratio = heaterCapacity > 0.0 ? heaterHeating / heaterCapacity : 0.0;
                 foreach (Heater heater in heaters)
                 {
                     heaterRatios[heater] = heaterRatios.TryGetValue(heater, out double already) ? already + ratio : ratio;
-                }
-
-                if (_regulators.TryGetValue(conditioner, out PidController? conditionerPid))
-                {
-                    conditionerPid.Reset();
+                    heaterWetness[heater] = Math.Max(heaterWetness.TryGetValue(heater, out double had) ? had : 0.0, wetness);
                 }
             }
 
             foreach (KeyValuePair<Heater, double> pair in heaterRatios)
             {
-                pair.Key.SetTargetPower(pair.Value);
-                if (_regulators.TryGetValue(pair.Key, out PidController? heaterPid))
-                {
-                    heaterPid.Reset();
-                }
+                double wetness = heaterWetness.TryGetValue(pair.Key, out double had) ? had : 1.0;
+                pair.Key.SetTargetPower(Lerp(pair.Key.TargetPowerRatio, pair.Value, wetness));
             }
+        }
+
+        private static double Lerp(double from, double to, double weight)
+        {
+            return from + (to - from) * Math.Clamp(weight, 0.0, 1.0);
         }
 
         private (double X, double Y) ControlPoint(AirConditioner conditioner, out double temperature)
