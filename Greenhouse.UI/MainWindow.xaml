@@ -72,13 +72,16 @@
                         <TextBlock x:Name="TxtRegime" Text="" FontSize="13" HorizontalAlignment="Center" Foreground="#555" Margin="0,4,0,0"/>
                     </StackPanel>
 
-                    <Border Grid.Row="1" BorderBrush="#333" BorderThickness="3" Background="#EEF1EA" Margin="10">
-                        <Grid>
-                            <Canvas x:Name="HeatmapCanvas" IsHitTestVisible="False" ClipToBounds="True"/>
-                            <Canvas x:Name="GridCanvas" IsHitTestVisible="False" ClipToBounds="True"/>
-                            <Canvas x:Name="GreenhouseCanvas" ClipToBounds="True" SizeChanged="GreenhouseCanvas_SizeChanged"/>
-                        </Grid>
-                    </Border>
+                    <Grid x:Name="PlanHost" Grid.Row="1" Margin="10" SizeChanged="PlanHost_SizeChanged">
+                        <Border x:Name="PlanFrame" BorderBrush="#333" BorderThickness="3" Background="#EEF1EA"
+                                HorizontalAlignment="Center" VerticalAlignment="Center">
+                            <Grid>
+                                <Canvas x:Name="HeatmapCanvas" IsHitTestVisible="False" ClipToBounds="True"/>
+                                <Canvas x:Name="GridCanvas" IsHitTestVisible="False" ClipToBounds="True"/>
+                                <Canvas x:Name="GreenhouseCanvas" ClipToBounds="True" SizeChanged="GreenhouseCanvas_SizeChanged"/>
+                            </Grid>
+                        </Border>
+                    </Grid>
                 </Grid>
             </GroupBox>
         </Grid>

@@ -47,11 +47,14 @@
         </Border>
 
         <!-- ЦЕНТР (Холст) -->
-        <Border Grid.Column="1" BorderBrush="#333" BorderThickness="3" Background="White" Margin="0,0,10,0">
-            <Canvas x:Name="EditorCanvas" AllowDrop="True" Drop="EditorCanvas_Drop" DragOver="EditorCanvas_DragOver" Background="Transparent" MouseMove="EditorCanvas_MouseMove" MouseLeftButtonUp="EditorCanvas_MouseUp">
-                <TextBlock Text="Перетащите элементы сюда" Canvas.Left="20" Canvas.Top="20" Foreground="#CCC" FontSize="20" IsHitTestVisible="False"/>
-            </Canvas>
-        </Border>
+        <Grid x:Name="PlanHost" Grid.Column="1" Margin="0,0,10,0">
+            <Border x:Name="PlanFrame" BorderBrush="#333" BorderThickness="3" Background="White"
+                    HorizontalAlignment="Center" VerticalAlignment="Center">
+                <Canvas x:Name="EditorCanvas" AllowDrop="True" Drop="EditorCanvas_Drop" DragOver="EditorCanvas_DragOver" Background="Transparent" MouseMove="EditorCanvas_MouseMove" MouseLeftButtonUp="EditorCanvas_MouseUp">
+                    <TextBlock Text="Перетащите элементы сюда" Canvas.Left="20" Canvas.Top="20" Foreground="#CCC" FontSize="20" IsHitTestVisible="False"/>
+                </Canvas>
+            </Border>
+        </Grid>
 
         <!-- ПРАВАЯ ПАНЕЛЬ (Свойства) -->
         <Border Grid.Column="2" Background="White" BorderBrush="#DDD" BorderThickness="1" CornerRadius="5" Padding="10">

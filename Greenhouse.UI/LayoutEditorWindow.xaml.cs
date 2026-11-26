@@ -28,8 +28,53 @@ namespace Greenhouse.UI
         {
             _greenhouse = greenhouse ?? throw new ArgumentNullException(nameof(greenhouse));
             InitializeComponent();
-            Loaded += (_, _) => PlaceExistingDevices();
-            EditorCanvas.SizeChanged += (_, _) => PlaceExistingDevices();
+            Loaded += (_, _) =>
+            {
+                FitPlanToHall();
+                UpdateLayout();
+                PlaceExistingDevices();
+            };
+            PlanHost.SizeChanged += (_, _) => FitPlanToHall();
+            EditorCanvas.SizeChanged += EditorCanvas_SizeChanged;
+        }
+
+        private void FitPlanToHall()
+        {
+            if (_greenhouse.Width <= 0 || _greenhouse.Length <= 0) return;
+
+            Thickness frame = PlanFrame.BorderThickness;
+            double frameWidth = frame.Left + frame.Right;
+            double frameHeight = frame.Top + frame.Bottom;
+            double width = PlanHost.ActualWidth - frameWidth;
+            double height = PlanHost.ActualHeight - frameHeight;
+            if (width <= 0 || height <= 0) return;
+
+            double scale = Math.Min(width / _greenhouse.Width, height / _greenhouse.Length);
+            PlanFrame.Width = Math.Floor(_greenhouse.Width * scale) + frameWidth;
+            PlanFrame.Height = Math.Floor(_greenhouse.Length * scale) + frameHeight;
+        }
+
+        private void EditorCanvas_SizeChanged(object sender, SizeChangedEventArgs e)
+        {
+            if (!_existingPlaced)
+            {
+                PlaceExistingDevices();
+                return;
+            }
+
+            if (e.PreviousSize.Width <= 0 || e.PreviousSize.Height <= 0) return;
+
+            double ratioX = e.NewSize.Width / e.PreviousSize.Width;
+            double ratioY = e.NewSize.Height / e.PreviousSize.Height;
+            foreach (FrameworkElement element in EditorCanvas.Children.OfType<FrameworkElement>())
+            {
+                if (element.Tag == null) continue;
+                double left = Canvas.GetLeft(element);
+                double top = Canvas.GetTop(element);
+                if (double.IsNaN(left) || double.IsNaN(top)) continue;
+                Canvas.SetLeft(element, (left + element.Width / 2) * ratioX - element.Width / 2);
+                Canvas.SetTop(element, (top + element.Height / 2) * ratioY - element.Height / 2);
+            }
         }
 
         // --- DRAG AND DROP ---

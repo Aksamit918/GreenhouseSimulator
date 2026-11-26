@@ -886,9 +886,33 @@ namespace Greenhouse.UI
             UpdateUI();
         }
 
+        private void PlanHost_SizeChanged(object sender, SizeChangedEventArgs e)
+        {
+            FitPlanToHall();
+        }
+
+        private void FitPlanToHall()
+        {
+            var hall = _controller?.Greenhouse;
+            if (hall == null || hall.Width <= 0 || hall.Length <= 0) return;
+
+            Thickness frame = PlanFrame.BorderThickness;
+            double frameWidth = frame.Left + frame.Right;
+            double frameHeight = frame.Top + frame.Bottom;
+            double width = PlanHost.ActualWidth - frameWidth;
+            double height = PlanHost.ActualHeight - frameHeight;
+            if (width <= 0 || height <= 0) return;
+
+            double scale = Math.Min(width / hall.Width, height / hall.Length);
+            PlanFrame.Width = Math.Floor(hall.Width * scale) + frameWidth;
+            PlanFrame.Height = Math.Floor(hall.Length * scale) + frameHeight;
+        }
+
         private void UpdateUI()
         {
             if (_controller == null || _controller.Greenhouse == null) return;
+
+            FitPlanToHall();
             
             try
             {
