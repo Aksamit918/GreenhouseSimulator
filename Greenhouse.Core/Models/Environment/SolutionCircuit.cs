@@ -12,6 +12,7 @@ namespace GreenhouseSimulator.Core.Models.Environment
         private readonly double[] _ec;
         private readonly double[] _nextPh;
         private readonly double[] _nextEc;
+        private readonly double[] _doseWeights;
         private readonly int _supplyCount;
         private readonly int _returnCount;
         private readonly double _segmentLength;
@@ -28,6 +29,7 @@ namespace GreenhouseSimulator.Core.Models.Environment
             _ec = new double[count];
             _nextPh = new double[count];
             _nextEc = new double[count];
+            _doseWeights = new double[_supplyCount];
             Reset();
         }
 
@@ -59,17 +61,46 @@ namespace GreenhouseSimulator.Core.Models.Environment
                     continue;
                 }
 
-                int index = SupplyIndex(doser.Location.X);
-                double alkali = doser.MaxPower * doser.CurrentPowerRatio * dt;
-                double acid = doser.MaxPower * doser.AcidPowerRatio * dt;
-                _ph[index] += alkali - acid;
-                _ec[index] += (alkali + acid) * _config.EcPerPhDose;
+                InjectDose(doser, dt);
             }
 
             MixSupply();
             Advect(dt);
             Mix(dt);
             Clamp();
+        }
+
+        // MaxPower is the pH rate of the whole circuit; the reagent enters the supply around the doser.
+        private void InjectDose(FertilizerDoser doser, double dt)
+        {
+            double alkali = doser.MaxPower * doser.CurrentPowerRatio * dt;
+            double acid = doser.MaxPower * doser.AcidPowerRatio * dt;
+            if (alkali <= 0.0 && acid <= 0.0)
+            {
+                return;
+            }
+
+            double totalWeight = 0.0;
+            for (int i = 0; i < _supplyCount; i++)
+            {
+                _doseWeights[i] = doser.GetAttenuation(((i + 0.5) * _segmentLength, doser.Location.Y));
+                totalWeight += _doseWeights[i];
+            }
+
+            if (totalWeight <= 0.0)
+            {
+                Array.Clear(_doseWeights);
+                _doseWeights[SupplyIndex(doser.Location.X)] = 1.0;
+                totalWeight = 1.0;
+            }
+
+            double phDose = (alkali - acid) * _ph.Length / totalWeight;
+            double ecDose = (alkali + acid) * _config.EcPerPhDose * _ph.Length / totalWeight;
+            for (int i = 0; i < _supplyCount; i++)
+            {
+                _ph[i] += phDose * _doseWeights[i];
+                _ec[i] += ecDose * _doseWeights[i];
+            }
         }
 
         private void Advect(double dt)

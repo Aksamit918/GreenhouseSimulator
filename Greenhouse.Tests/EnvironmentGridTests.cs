@@ -114,7 +114,7 @@ public class EnvironmentGridTests
     {
         var grid = new EnvironmentGrid(new SimulationConfig());
         var doser = new FertilizerDoser((5, 2));
-        doser.SetTargetPower(1);
+        doser.SetTargetPower(0.3);
         doser.UpdateInertia(1);
 
         grid.StepPhysics(12, new List<Actuator> { doser });
@@ -129,5 +129,24 @@ public class EnvironmentGridTests
         }
 
         Assert.True(max - min < 0.2);
+    }
+
+    [Fact]
+    public void PartialDoseOutrunsTheDrift()
+    {
+        var config = new SimulationConfig { InitialPh = 5.4 };
+        var circuit = new SolutionCircuit(config, 20);
+        var doser = new FertilizerDoser((7.5, 2));
+        doser.SetTargetPower(0.3);
+        doser.UpdateInertia(1);
+        var actuators = new List<Actuator> { doser };
+
+        for (int step = 0; step < 4 * config.SubstepsPerHour; step++)
+        {
+            circuit.Advance(1.0 / config.SubstepsPerHour, actuators);
+        }
+
+        Assert.InRange(circuit.PhAt(2, 1), 5.9, 6.4);
+        Assert.InRange(circuit.PhAt(8, 5), 5.9, 6.4);
     }
 }
