@@ -9,6 +9,7 @@ namespace GreenhouseSimulator.Core.Models.Sensors
         private double _targetValue;
         private double _toleranceBelow;
         private double _toleranceAbove;
+        private bool _hasThresholds;
 
         public double Hysteresis { get; set; } = 0.2;
         public bool IsInAlertState { get; private set; }
@@ -39,6 +40,7 @@ namespace GreenhouseSimulator.Core.Models.Sensors
             _targetValue = target;
             _toleranceBelow = toleranceBelow;
             _toleranceAbove = toleranceAbove;
+            _hasThresholds = true;
         }
 
         public override void ResetMeasurement()
@@ -51,6 +53,12 @@ namespace GreenhouseSimulator.Core.Models.Sensors
         {
             CurrentValue = newValue;
             HasMeasurement = true;
+
+            if (!_hasThresholds)
+            {
+                IsInAlertState = false;
+                return;
+            }
 
             double signedDeviation = newValue - _targetValue;
 
