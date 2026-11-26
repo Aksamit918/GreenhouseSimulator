@@ -73,9 +73,9 @@
                     </StackPanel>
 
                     <Border Grid.Row="1" BorderBrush="#333" BorderThickness="3" Background="White" Margin="10">
-                        <!-- Два холста: один под квадратики, другой под иконки приборов -->
                         <Grid>
-                            <Canvas x:Name="HeatmapCanvas" ClipToBounds="True"/>
+                            <Canvas x:Name="HeatmapCanvas" IsHitTestVisible="False" ClipToBounds="True"/>
+                            <Canvas x:Name="GridCanvas" IsHitTestVisible="False" ClipToBounds="True"/>
                             <Canvas x:Name="GreenhouseCanvas" ClipToBounds="True" SizeChanged="GreenhouseCanvas_SizeChanged"/>
                         </Grid>
                     </Border>

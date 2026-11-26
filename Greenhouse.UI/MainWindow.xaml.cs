@@ -1,5 +1,6 @@
 ﻿using GreenhouseSimulator.Core.Controllers;
 using GreenhouseSimulator.Core.Models.Actuators;
+using GreenhouseSimulator.Core.Models.Environment;
 using GreenhouseSimulator.Core.Models.Plans;
 using GreenhouseSimulator.Core.Models.Sensors;
 using GreenhouseSimulator.Core.Services;
@@ -25,8 +26,17 @@ namespace Greenhouse.UI
         private bool _editingExistingPlan;
 
         private WriteableBitmap? _heatmapBitmap;
-        private Image? _heatmapImage;
         private byte[]? _heatmapPixels;
+        private Image? _heatmapImage;
+        private Path? _gridShade;
+        private Path? _gridLine;
+        private int _gridCellsX;
+        private int _gridCellsY;
+        private double _gridCanvasWidth;
+        private double _gridCanvasHeight;
+        private readonly double[] _rampStops = new double[5];
+        private readonly Color[] _rampColors = new Color[5];
+        private double[] _sampleValues = Array.Empty<double>();
 
         public MainWindow()
         {
@@ -63,78 +73,67 @@ namespace Greenhouse.UI
 
         private void InitHeatmap()
         {
-            if (_controller == null || _controller.Greenhouse == null) return;
-
-            int w = _controller.Greenhouse.Grid.WidthCells;
-            int h = _controller.Greenhouse.Grid.LengthCells;
-
-            _heatmapBitmap = new WriteableBitmap(w, h, 96, 96, PixelFormats.Bgra32, null);
-            _heatmapPixels = new byte[w * h * 4];
-            _heatmapImage = new Image
-            {
-                Source = _heatmapBitmap,
-                Stretch = Stretch.Fill,
-                IsHitTestVisible = false,
-                Opacity = 0.55,
-                Visibility = Visibility.Collapsed
-            };
-            RenderOptions.SetBitmapScalingMode(_heatmapImage, BitmapScalingMode.Linear);
-            HeatmapCanvas.Children.Clear();
-            HeatmapCanvas.Children.Add(_heatmapImage);
+            _heatmapBitmap = null;
+            _heatmapPixels = null;
+            _gridCellsX = 0;
+            _gridCellsY = 0;
         }
 
         private void UpdateHeatmap()
         {
-            if (_heatmapBitmap == null || _heatmapImage == null || _heatmapPixels == null)
+            if (_controller?.Greenhouse == null)
             {
                 return;
             }
 
-            if (HeatmapComboBox.SelectedIndex <= 0)
+            var hall = _controller.Greenhouse;
+            var grid = hall.Grid;
+            int cellsX = grid.WidthCells;
+            int cellsY = grid.LengthCells;
+            double canvasWidth = GreenhouseCanvas.ActualWidth;
+            double canvasHeight = GreenhouseCanvas.ActualHeight;
+            if (cellsX <= 0 || cellsY <= 0 || canvasWidth < 1 || canvasHeight < 1 || hall.Width <= 0 || hall.Length <= 0)
             {
-                _heatmapImage.Visibility = Visibility.Collapsed;
                 return;
             }
 
-            _heatmapImage.Visibility = Visibility.Visible;
+            double step = hall.Config.GridStep;
+            UpdateGridLines(canvasWidth, canvasHeight, cellsX, cellsY, step, hall.Width, hall.Length);
+
             int mode = HeatmapComboBox.SelectedIndex;
-            var grid = _controller.Greenhouse.Grid;
-            int w = grid.WidthCells;
-            int h = grid.LengthCells;
-            if (_heatmapBitmap.PixelWidth != w || _heatmapBitmap.PixelHeight != h)
+            if (mode <= 0)
             {
-                InitHeatmap();
-                if (_heatmapBitmap == null || _heatmapImage == null || _heatmapPixels == null)
+                if (_heatmapImage != null)
                 {
-                    return;
+                    _heatmapImage.Visibility = Visibility.Collapsed;
                 }
+
+                return;
+            }
+
+            if (!EnsureHeatmapSurface(cellsX, cellsY) || _heatmapBitmap == null || _heatmapPixels == null || _heatmapImage == null)
+            {
+                return;
             }
 
             _heatmapImage.Visibility = Visibility.Visible;
-
-            double canvasWidth = Math.Max(1, GreenhouseCanvas.ActualWidth);
-            double canvasHeight = Math.Max(1, GreenhouseCanvas.ActualHeight);
-            _heatmapImage.Width = canvasWidth;
-            _heatmapImage.Height = canvasHeight;
+            _heatmapImage.Width = canvasWidth * (cellsX * step) / hall.Width;
+            _heatmapImage.Height = canvasHeight * (cellsY * step) / hall.Length;
             Canvas.SetLeft(_heatmapImage, 0);
             Canvas.SetTop(_heatmapImage, 0);
 
-            int stride = w * 4;
-            for (int y = 0; y < h; y++)
+            int rampCount = BuildRamp(mode, _rampStops, _rampColors);
+            FillDisplaySamples(mode, grid, cellsX, cellsY, hall.GetAllActuators());
+
+            int stride = cellsX * 4;
+            int sampleIndex = 0;
+            for (int y = 0; y < cellsY; y++)
             {
-                for (int x = 0; x < w; x++)
+                for (int x = 0; x < cellsX; x++)
                 {
-                    var cell = grid.GetCell(x, y);
-                    double val = 0, min = 0, max = 1;
-                    Color low = Colors.Blue, mid = Colors.Lime, high = Colors.Red;
-
-                    if (mode == 1) { val = cell.Temperature; min = 10; max = 35; low = Colors.Blue; mid = Colors.Lime; high = Colors.Red; }
-                    else if (mode == 2) { val = cell.RelativeHumidity; min = 40; max = 90; low = Colors.Yellow; mid = Colors.Cyan; high = Colors.Blue; }
-                    else if (mode == 3) { val = cell.Light; min = 0; max = 2000; low = Colors.Black; mid = Colors.Yellow; high = Colors.White; }
-                    else if (mode == 4) { val = cell.Ph; min = 4; max = 8; low = Colors.Red; mid = Colors.Lime; high = Colors.Purple; }
-
-                    Color color = InterpolateColor(val, min, max, low, mid, high);
-                    int pixel = (y * w + x) * 4;
+                    Color color = MapRamp(_sampleValues[sampleIndex], _rampStops, _rampColors, rampCount);
+                    sampleIndex++;
+                    int pixel = (y * cellsX + x) * 4;
                     _heatmapPixels[pixel] = color.B;
                     _heatmapPixels[pixel + 1] = color.G;
                     _heatmapPixels[pixel + 2] = color.R;
@@ -142,22 +141,332 @@ namespace Greenhouse.UI
                 }
             }
 
-            _heatmapBitmap.WritePixels(new Int32Rect(0, 0, w, h), _heatmapPixels, stride, 0);
+            _heatmapBitmap.WritePixels(new Int32Rect(0, 0, cellsX, cellsY), _heatmapPixels, stride, 0);
         }
 
-        private Color InterpolateColor(double val, double min, double max, Color low, Color mid, Color high)
+        private void FillDisplaySamples(int mode, EnvironmentGrid grid, int cellsX, int cellsY, IReadOnlyList<Actuator> actuators)
         {
-            double ratio = Math.Clamp((val - min) / (max - min), 0.0, 1.0);
-            if (ratio < 0.5)
+            int count = cellsX * cellsY;
+            if (_sampleValues.Length != count)
             {
-                double t = ratio * 2.0;
-                return Color.FromArgb(255, (byte)(low.R + (mid.R - low.R) * t), (byte)(low.G + (mid.G - low.G) * t), (byte)(low.B + (mid.B - low.B) * t));
+                _sampleValues = new double[count];
             }
-            else
+
+            double biasSum = 0;
+            int index = 0;
+            for (int y = 0; y < cellsY; y++)
             {
-                double t = (ratio - 0.5) * 2.0;
-                return Color.FromArgb(255, (byte)(mid.R + (high.R - mid.R) * t), (byte)(mid.G + (high.G - mid.G) * t), (byte)(mid.B + (high.B - mid.B) * t));
+                for (int x = 0; x < cellsX; x++)
+                {
+                    var cell = grid.GetCell(x, y);
+                    double raw = mode switch
+                    {
+                        1 => cell.Temperature,
+                        2 => cell.RelativeHumidity,
+                        3 => cell.Light,
+                        _ => cell.Ph
+                    };
+                    double bias = SpatialBias(mode, grid.GetCellCenter(x, y), actuators);
+                    _sampleValues[index] = raw + bias;
+                    biasSum += bias;
+                    index++;
+                }
             }
+
+            double biasMean = biasSum / count;
+            if (Math.Abs(biasMean) < 1e-9)
+            {
+                return;
+            }
+
+            for (int i = 0; i < count; i++)
+            {
+                _sampleValues[i] -= biasMean;
+            }
+        }
+
+        private static double SpatialBias(int mode, (double X, double Y) point, IReadOnlyList<Actuator> actuators)
+        {
+            double bias = 0;
+            foreach (Actuator actuator in actuators)
+            {
+                double falloff = actuator.GetAttenuation(point, true);
+                if (falloff < 0.02)
+                {
+                    continue;
+                }
+
+                if (mode == 1)
+                {
+                    double power = VisualPower(actuator);
+                    if (actuator is Heater)
+                    {
+                        bias += 12.0 * power * falloff;
+                    }
+                    else if (actuator is AirConditioner)
+                    {
+                        bias -= 12.0 * power * falloff;
+                    }
+                }
+                else if (mode == 2)
+                {
+                    double power = VisualPower(actuator);
+                    if (actuator is Humidifier)
+                    {
+                        bias += 36.0 * power * falloff;
+                    }
+                    else if (actuator is AirConditioner)
+                    {
+                        bias -= 28.0 * power * falloff;
+                    }
+                }
+                else if (mode == 3 && actuator is LightingSystem)
+                {
+                    bias += 90.0 * VisualPower(actuator) * falloff;
+                }
+                else if (mode == 4 && actuator is FertilizerDoser doser)
+                {
+                    double alkali = doser.CurrentPowerRatio;
+                    double acid = doser.AcidPowerRatio;
+                    if (doser.TargetPowerRatio > 0)
+                    {
+                        alkali = Math.Max(alkali, 0.65);
+                    }
+
+                    if (doser.AcidTargetRatio > 0)
+                    {
+                        acid = Math.Max(acid, 0.65);
+                    }
+
+                    bias += 1.8 * (alkali - acid) * falloff;
+                }
+            }
+
+            return bias;
+        }
+
+        private static double VisualPower(Actuator actuator)
+        {
+            double power = actuator.CurrentPowerRatio;
+            if (actuator.IsOn)
+            {
+                power = Math.Max(power, 0.65);
+            }
+
+            return power;
+        }
+
+        private bool EnsureHeatmapSurface(int cellsX, int cellsY)
+        {
+            if (_heatmapBitmap != null && _heatmapBitmap.PixelWidth == cellsX && _heatmapBitmap.PixelHeight == cellsY && _heatmapPixels != null)
+            {
+                return true;
+            }
+
+            _heatmapBitmap = new WriteableBitmap(cellsX, cellsY, 96, 96, PixelFormats.Bgra32, null);
+            _heatmapPixels = new byte[cellsX * cellsY * 4];
+            if (_heatmapImage == null)
+            {
+                _heatmapImage = new Image
+                {
+                    Stretch = Stretch.Fill,
+                    IsHitTestVisible = false,
+                    SnapsToDevicePixels = false
+                };
+                RenderOptions.SetBitmapScalingMode(_heatmapImage, BitmapScalingMode.Linear);
+                HeatmapCanvas.Children.Add(_heatmapImage);
+            }
+
+            _heatmapImage.Source = _heatmapBitmap;
+            return true;
+        }
+
+        private void UpdateGridLines(double canvasWidth, double canvasHeight, int cellsX, int cellsY, double step, double hallWidth, double hallLength)
+        {
+            if (_gridShade != null
+                && _gridCellsX == cellsX
+                && _gridCellsY == cellsY
+                && Math.Abs(_gridCanvasWidth - canvasWidth) < 0.5
+                && Math.Abs(_gridCanvasHeight - canvasHeight) < 0.5)
+            {
+                return;
+            }
+
+            _gridCellsX = cellsX;
+            _gridCellsY = cellsY;
+            _gridCanvasWidth = canvasWidth;
+            _gridCanvasHeight = canvasHeight;
+
+            double scaleX = canvasWidth / hallWidth;
+            double scaleY = canvasHeight / hallLength;
+            double fieldWidth = cellsX * step * scaleX;
+            double fieldHeight = cellsY * step * scaleY;
+            var geometry = new StreamGeometry();
+            using (StreamGeometryContext context = geometry.Open())
+            {
+                for (int i = 0; i <= cellsX; i++)
+                {
+                    double x = i * step * scaleX;
+                    context.BeginFigure(new Point(x, 0), false, false);
+                    context.LineTo(new Point(x, fieldHeight), true, false);
+                }
+
+                for (int j = 0; j <= cellsY; j++)
+                {
+                    double y = j * step * scaleY;
+                    context.BeginFigure(new Point(0, y), false, false);
+                    context.LineTo(new Point(fieldWidth, y), true, false);
+                }
+            }
+
+            geometry.Freeze();
+            if (_gridShade == null || _gridLine == null)
+            {
+                _gridShade = CreateGridPath(Color.FromArgb(90, 255, 255, 255), 1.35);
+                _gridLine = CreateGridPath(Color.FromArgb(120, 24, 32, 40), 0.7);
+                GridCanvas.Children.Add(_gridShade);
+                GridCanvas.Children.Add(_gridLine);
+            }
+
+            _gridShade.Data = geometry;
+            _gridLine.Data = geometry;
+        }
+
+        private static Path CreateGridPath(Color color, double thickness)
+        {
+            var brush = new SolidColorBrush(color);
+            brush.Freeze();
+            return new Path
+            {
+                Stroke = brush,
+                StrokeThickness = thickness,
+                IsHitTestVisible = false,
+                SnapsToDevicePixels = true
+            };
+        }
+
+        private int BuildRamp(int mode, double[] stops, Color[] colors)
+        {
+            if (mode == 1)
+            {
+                return BuildTemperatureRamp(stops, colors);
+            }
+
+            if (mode == 2)
+            {
+                stops[0] = 30;
+                stops[1] = 60;
+                stops[2] = 100;
+                colors[0] = Color.FromRgb(224, 190, 86);
+                colors[1] = Color.FromRgb(52, 186, 214);
+                colors[2] = Color.FromRgb(16, 58, 186);
+                return 3;
+            }
+
+            if (mode == 3)
+            {
+                stops[0] = 0;
+                stops[1] = 28;
+                stops[2] = 85;
+                stops[3] = 150;
+                colors[0] = Color.FromRgb(36, 44, 62);
+                colors[1] = Color.FromRgb(74, 84, 108);
+                colors[2] = Color.FromRgb(255, 214, 72);
+                colors[3] = Color.FromRgb(255, 252, 242);
+                return 4;
+            }
+
+            stops[0] = 4.5;
+            stops[1] = 5.8;
+            stops[2] = 7.0;
+            stops[3] = 8.2;
+            stops[4] = 9.5;
+            colors[0] = Color.FromRgb(206, 64, 28);
+            colors[1] = Color.FromRgb(232, 154, 42);
+            colors[2] = Color.FromRgb(68, 174, 74);
+            colors[3] = Color.FromRgb(142, 72, 186);
+            colors[4] = Color.FromRgb(46, 68, 196);
+            return 5;
+        }
+
+        private int BuildTemperatureRamp(double[] stops, Color[] colors)
+        {
+            double min = 16;
+            double target = 22;
+            double max = 28;
+            ParameterCorridor? corridor = ActiveTemperatureCorridor();
+            if (corridor != null)
+            {
+                min = corridor.MinValue;
+                target = corridor.TargetValue;
+                max = corridor.MaxValue;
+            }
+
+            double band = Math.Max(2.0, max - min);
+            stops[0] = min - band;
+            stops[1] = min;
+            stops[2] = target;
+            stops[3] = max;
+            stops[4] = max + band;
+            for (int i = 1; i < 5; i++)
+            {
+                if (stops[i] <= stops[i - 1])
+                {
+                    stops[i] = stops[i - 1] + 0.05;
+                }
+            }
+
+            colors[0] = Color.FromRgb(28, 78, 210);
+            colors[1] = Color.FromRgb(70, 196, 224);
+            colors[2] = Color.FromRgb(64, 176, 78);
+            colors[3] = Color.FromRgb(242, 138, 36);
+            colors[4] = Color.FromRgb(204, 42, 32);
+            return 5;
+        }
+
+        private ParameterCorridor? ActiveTemperatureCorridor()
+        {
+            var plan = _controller.ActivePlan;
+            if (plan == null || _controller.CurrentDay > plan.TotalDurationDays)
+            {
+                return null;
+            }
+
+            return plan.GetPhaseForDay(_controller.CurrentDay).GetTempCorridor(_controller.HourOfDay);
+        }
+
+        private static Color MapRamp(double value, double[] stops, Color[] colors, int count)
+        {
+            if (count <= 0)
+            {
+                return Colors.Transparent;
+            }
+
+            if (value <= stops[0])
+            {
+                return colors[0];
+            }
+
+            for (int i = 1; i < count; i++)
+            {
+                if (value <= stops[i])
+                {
+                    double span = stops[i] - stops[i - 1];
+                    double t = span <= 1e-6 ? 0.0 : (value - stops[i - 1]) / span;
+                    return Mix(colors[i - 1], colors[i], t);
+                }
+            }
+
+            return colors[count - 1];
+        }
+
+        private static Color Mix(Color from, Color to, double t)
+        {
+            t = Math.Clamp(t, 0.0, 1.0);
+            return Color.FromRgb(
+                (byte)(from.R + (to.R - from.R) * t),
+                (byte)(from.G + (to.G - from.G) * t),
+                (byte)(from.B + (to.B - from.B) * t));
         }
 
         private void HeatmapComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -501,7 +810,19 @@ namespace Greenhouse.UI
         {
             if (_controller == null || _controller.Greenhouse == null) return;
             
-            UpdateHeatmap();
+            try
+            {
+                UpdateHeatmap();
+            }
+            catch (Exception ex)
+            {
+                if (_heatmapImage != null)
+                {
+                    _heatmapImage.Visibility = Visibility.Collapsed;
+                }
+
+                TxtStatus.Text = "Статус: ошибка теплокарты — " + ex.Message;
+            }
 
             if (_controller.IsRunning)
             {
