@@ -15,6 +15,9 @@
             return NightTempCorridor is null || (hourOfDay % 24) < dayHours;
         }
 
+        public const int TransitionHours = 2;
+
+        // A sudden evening drop makes the AC chill the humid day air straight past the humidity ceiling.
         public ParameterCorridor GetTempCorridor(int hourOfDay)
         {
             if (IsDaytime(hourOfDay) || NightTempCorridor is null)
@@ -22,7 +25,17 @@
                 return TempCorridor;
             }
 
-            return NightTempCorridor;
+            int sinceDusk = (hourOfDay % 24) - DayDurationHours;
+            if (sinceDusk >= TransitionHours)
+            {
+                return NightTempCorridor;
+            }
+
+            double share = (sinceDusk + 1.0) / (TransitionHours + 1.0);
+            return new ParameterCorridor(
+                TempCorridor.MinValue + share * (NightTempCorridor.MinValue - TempCorridor.MinValue),
+                TempCorridor.MaxValue + share * (NightTempCorridor.MaxValue - TempCorridor.MaxValue),
+                TempCorridor.TargetValue + share * (NightTempCorridor.TargetValue - TempCorridor.TargetValue));
         }
 
         public void EnsureValid()
