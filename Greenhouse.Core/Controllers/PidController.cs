@@ -32,9 +32,15 @@ namespace GreenhouseSimulator.Core.Controllers
 
         public double Compute(double error, double dt)
         {
-            _integral += error * dt;
             double maxIntegral = Ki > 0.0 ? 1.0 / Ki : 0.0;
-            _integral = Math.Clamp(_integral, 0.0, maxIntegral);
+            if (error > 0.0)
+            {
+                _integral = Math.Min(maxIntegral, _integral + error * dt);
+            }
+            else
+            {
+                _integral = 0.0;
+            }
 
             double derivative = (_hasPreviousError && dt > 0.0) ? (error - _previousError) / dt : 0.0;
             _previousError = error;
