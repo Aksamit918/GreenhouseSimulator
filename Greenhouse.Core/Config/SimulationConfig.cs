@@ -17,6 +17,8 @@ namespace GreenhouseSimulator.Core.Config
         public double MaxDiffusionStepFactor { get; set; } = 0.24;
         public double InteriorAirMix { get; set; } = 0.75;
         public double PerimeterAirMix { get; set; } = 0.35;
+        public double PlumeResidenceHours { get; set; } = 0.6;
+        public double PlumeRadiusFactor { get; set; } = 0.4;
         public double TMin { get; set; } = 5.0;
         public double TMax { get; set; } = 15.0;
         public double HoursPerTick { get; set; } = 1.0;

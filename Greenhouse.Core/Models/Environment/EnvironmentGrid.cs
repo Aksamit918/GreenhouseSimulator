@@ -16,6 +16,8 @@ namespace GreenhouseSimulator.Core.Models.Environment
         private ClimateCell[,] _currentCells;
         private ClimateCell[,] _nextCells;
         private readonly SolutionCircuit _solution;
+        private readonly double[,] _plumeTemperature;
+        private readonly double[,] _plumeHumidity;
 
         public EnvironmentGrid(SimulationConfig config)
         {
@@ -25,6 +27,8 @@ namespace GreenhouseSimulator.Core.Models.Environment
             _currentCells = new ClimateCell[WidthCells, LengthCells];
             _nextCells = new ClimateCell[WidthCells, LengthCells];
             _solution = new SolutionCircuit(config, WidthCells);
+            _plumeTemperature = new double[WidthCells, LengthCells];
+            _plumeHumidity = new double[WidthCells, LengthCells];
 
             for (int i = 0; i < WidthCells; i++)
             {
@@ -59,6 +63,8 @@ namespace GreenhouseSimulator.Core.Models.Environment
                     _currentCells[i, j].Ph = _config.InitialPh;
                     _currentCells[i, j].Ec = _config.InitialEc;
                     _nextCells[i, j].CopyFrom(_currentCells[i, j]);
+                    _plumeTemperature[i, j] = 0.0;
+                    _plumeHumidity[i, j] = 0.0;
                 }
             }
 
@@ -270,6 +276,87 @@ namespace GreenhouseSimulator.Core.Models.Environment
             }
         }
 
+        // The plume is the outlet air the fans have not mixed yet; it is lifted off before bulk physics and laid back afterwards.
+        private void WithdrawPlumes()
+        {
+            for (int i = 0; i < WidthCells; i++)
+            {
+                for (int j = 0; j < LengthCells; j++)
+                {
+                    _currentCells[i, j].Temperature -= _plumeTemperature[i, j];
+                    _currentCells[i, j].AbsoluteHumidity -= _plumeHumidity[i, j];
+                }
+            }
+        }
+
+        private void ReleasePlumes(IReadOnlyList<Actuator> actuators)
+        {
+            double previousHeat = 0.0;
+            double previousWater = 0.0;
+            for (int i = 0; i < WidthCells; i++)
+            {
+                for (int j = 0; j < LengthCells; j++)
+                {
+                    previousHeat += _plumeTemperature[i, j];
+                    previousWater += _plumeHumidity[i, j];
+                    _plumeTemperature[i, j] = 0.0;
+                    _plumeHumidity[i, j] = 0.0;
+                }
+            }
+
+            foreach (Actuator actuator in actuators)
+            {
+                double radius = actuator.EffectiveRadius * _config.PlumeRadiusFactor;
+                if (radius <= 0.0)
+                {
+                    continue;
+                }
+
+                ClimateDelta outlet = actuator.GetImpactAt(actuator.Location, _config.PlumeResidenceHours, _config.UseGaussianAttenuation);
+                if (outlet.DeltaTemp == 0.0 && outlet.DeltaAbsHumidity == 0.0)
+                {
+                    continue;
+                }
+
+                double inverseSpread = 1.0 / (2.0 * radius * radius);
+                for (int i = 0; i < WidthCells; i++)
+                {
+                    for (int j = 0; j < LengthCells; j++)
+                    {
+                        (double X, double Y) center = GetCellCenter(i, j);
+                        double dx = center.X - actuator.Location.X;
+                        double dy = center.Y - actuator.Location.Y;
+                        double weight = Math.Exp(-(dx * dx + dy * dy) * inverseSpread);
+                        _plumeTemperature[i, j] += outlet.DeltaTemp * weight;
+                        _plumeHumidity[i, j] += outlet.DeltaAbsHumidity * weight;
+                    }
+                }
+            }
+
+            double heat = 0.0;
+            double water = 0.0;
+            for (int i = 0; i < WidthCells; i++)
+            {
+                for (int j = 0; j < LengthCells; j++)
+                {
+                    heat += _plumeTemperature[i, j];
+                    water += _plumeHumidity[i, j];
+                }
+            }
+
+            int count = WidthCells * LengthCells;
+            double heatShift = (heat - previousHeat) / count;
+            double waterShift = (water - previousWater) / count;
+            for (int i = 0; i < WidthCells; i++)
+            {
+                for (int j = 0; j < LengthCells; j++)
+                {
+                    _currentCells[i, j].Temperature += _plumeTemperature[i, j] - heatShift;
+                    _currentCells[i, j].AbsoluteHumidity += _plumeHumidity[i, j] - waterShift;
+                }
+            }
+        }
+
         public void ApplyPlantMetabolism(double dt)
         {
             for (int i = 0; i < WidthCells; i++)
@@ -355,6 +442,7 @@ namespace GreenhouseSimulator.Core.Models.Environment
 
         public void StepSubstep(double hourOfDay, double dt, IReadOnlyList<Actuator> actuators)
         {
+            WithdrawPlumes();
             ApplyWallHeatLoss(GetOutsideTemperature(hourOfDay), dt);
             ApplyActuators(actuators, dt);
             ApplySolar(hourOfDay, dt);
@@ -362,6 +450,7 @@ namespace GreenhouseSimulator.Core.Models.Environment
             ApplyAirCirculation();
             ApplyHydroponicCirculation(dt, actuators);
             ApplyPlantMetabolism(dt);
+            ReleasePlumes(actuators);
             EnforceLimits();
         }
 

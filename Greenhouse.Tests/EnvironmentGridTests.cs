@@ -74,6 +74,42 @@ public class EnvironmentGridTests
     }
 
     [Fact]
+    public void RunningHeaterWarmsItsSurroundingsMostWithoutAddingHeat()
+    {
+        var plumeGrid = new EnvironmentGrid(new SimulationConfig { WallInsulationCoeff = 0.0 });
+        var mixedGrid = new EnvironmentGrid(new SimulationConfig { WallInsulationCoeff = 0.0, PlumeResidenceHours = 0.0 });
+        var plumeHeater = new Heater((5, 3));
+        var mixedHeater = new Heater((5, 3));
+        plumeHeater.TurnOn();
+        mixedHeater.TurnOn();
+
+        plumeGrid.StepPhysics(2.0, new List<Actuator> { plumeHeater });
+        mixedGrid.StepPhysics(2.0, new List<Actuator> { mixedHeater });
+
+        double plumeSpread = plumeGrid.GetCell(10, 6).Temperature - plumeGrid.GetCell(0, 0).Temperature;
+        double mixedSpread = mixedGrid.GetCell(10, 6).Temperature - mixedGrid.GetCell(0, 0).Temperature;
+        Assert.True(plumeSpread > 1.5);
+        Assert.True(mixedSpread < 0.5);
+        Assert.True(plumeGrid.GetCell(13, 6).Temperature > plumeGrid.GetCell(17, 6).Temperature);
+        Assert.Equal(mixedGrid.GetAverageTemperature(), plumeGrid.GetAverageTemperature(), 1);
+    }
+
+    [Fact]
+    public void SwitchedOffHeaterReturnsItsPlumeToTheHall()
+    {
+        var grid = new EnvironmentGrid(new SimulationConfig { WallInsulationCoeff = 0.0 });
+        var heater = new Heater((5, 3));
+        heater.TurnOn();
+        grid.StepPhysics(2.0, new List<Actuator> { heater });
+
+        heater.TurnOff();
+        grid.StepPhysics(3.0, new List<Actuator> { heater });
+
+        double spread = grid.GetCell(10, 6).Temperature - grid.GetCell(0, 0).Temperature;
+        Assert.True(spread < 0.5);
+    }
+
+    [Fact]
     public void DoseSpreadsAlongTheSupply()
     {
         var grid = new EnvironmentGrid(new SimulationConfig());
