@@ -9,6 +9,11 @@ namespace GreenhouseSimulator.Core.Models.Biology
 
     public class CropGrowthModel
     {
+        private const double UniformityTempWeight = 5.0;
+        private const double UniformityHumidityWeight = 0.4;
+        private const double UniformityPhWeight = 8.0;
+        private const double UniformityLightWeight = 0.015;
+
         private readonly SimulationConfig _config;
         private readonly double[,] _cellYield;
         private readonly bool[,] _cellDead;
@@ -201,10 +206,10 @@ namespace GreenhouseSimulator.Core.Models.Biology
         private void RememberClimate(EnvironmentGrid grid)
         {
             _uniformityPenalty =
-                grid.GetTemperatureStdDev() * 5.0
-                + grid.GetHumidityStdDev() * 0.4
-                + grid.GetPhStdDev() * 8.0
-                + grid.GetLightStdDev() * 0.015;
+                grid.GetTemperatureStdDev() * UniformityTempWeight
+                + grid.GetHumidityStdDev() * UniformityHumidityWeight
+                + grid.GetPhStdDev() * UniformityPhWeight
+                + grid.GetLightStdDev() * UniformityLightWeight;
         }
 
         private static double Suitability(double actual, ParameterCorridor corridor, double margin)
