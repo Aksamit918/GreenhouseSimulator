@@ -135,7 +135,6 @@ namespace GreenhouseSimulator.Core.Controllers
 
             _isRunning = false;
             _isPaused = false;
-            Statistics.FlushOpenDay();
 
             foreach (var actuator in _greenhouse.GetAllActuators())
             {
@@ -188,8 +187,6 @@ namespace GreenhouseSimulator.Core.Controllers
                 _greenhouse.Tick(phase, HourOfDay, () => RegulateEnvironment(phase));
                 _cropGrowth.Advance(_greenhouse.Grid, phase, HourOfDay, CurrentDay, _greenhouse.Config.HoursPerTick);
                 Statistics.RecordTick(
-                    CurrentDay,
-                    HourOfDay,
                     _greenhouse.CurrentTemperature,
                     _greenhouse.CurrentHumidity,
                     _greenhouse.CurrentPh,
