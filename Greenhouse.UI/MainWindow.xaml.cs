@@ -22,7 +22,7 @@ namespace Greenhouse.UI
     {
         private GreenhouseController _controller;
         private DispatcherTimer _timer;
-        private List<string> _currentAlerts = new List<string>();
+        private Dictionary<string, string> _currentAlerts = new Dictionary<string, string>();
         private Dictionary<Actuator, bool> _actuatorStates = new Dictionary<Actuator, bool>();
         private string? _climateRegime;
         private bool _editingExistingPlan;
@@ -987,29 +987,34 @@ namespace Greenhouse.UI
         }
 
         private void LogRegulatorGroup(string timeStamp, IReadOnlyList<Actuator> actuators, Func<Actuator, bool> match, Func<int, string> turnedOn, string turnedOff, Func<int, string> removedWhileWorking, Func<int, int, string> resized, Func<int, int, string> idleCountChanged, bool schemeEdited)
-        {
-            int previousTotal = 0, previousOn = 0, currentTotal = 0, currentOn = 0;
-            foreach (var pair in _actuatorStates) { if (match(pair.Key)) { previousTotal++; if (pair.Value) previousOn++; } }
-            foreach (var a in actuators) { if (match(a)) { currentTotal++; if (a.IsOn) currentOn++; } }
+{
+    int previousTotal = 0, previousOn = 0, currentTotal = 0, currentOn = 0;
+    foreach (var pair in _actuatorStates) { if (match(pair.Key)) { previousTotal++; if (pair.Value) previousOn++; } }
+    foreach (var a in actuators) { if (match(a)) { currentTotal++; if (a.IsOn) currentOn++; } }
 
-            if (previousTotal == currentTotal && previousOn == currentOn) return;
+    if (previousTotal == currentTotal && previousOn == currentOn) return;
 
-            string? line = null;
-            if (currentOn > 0 && previousOn == 0) line = turnedOn(currentOn);
-            else if (currentOn == 0 && previousOn > 0 && currentTotal == 0) line = removedWhileWorking(previousTotal);
-            else if (currentOn == 0 && previousOn > 0) line = turnedOff;
-            else if (currentOn > 0 && previousOn > 0 && currentOn != previousOn) line = resized(previousOn, currentOn);
-            else if (previousTotal != currentTotal && (previousTotal > 0 || schemeEdited)) line = idleCountChanged(previousTotal, currentTotal);
+    string? line = null;
+    if (currentOn > 0 && previousOn == 0) line = turnedOn(currentOn);
+    else if (currentOn == 0 && previousOn > 0 && currentTotal == 0) line = removedWhileWorking(previousTotal);
+    else if (currentOn == 0 && previousOn > 0) line = turnedOff;
+    else if (currentOn > 0 && previousOn > 0 && currentOn != previousOn) line = resized(previousOn, currentOn);
+    else if (previousTotal != currentTotal && (previousTotal > 0 || schemeEdited)) line = idleCountChanged(previousTotal, currentTotal);
 
-            if (!string.IsNullOrEmpty(line)) TxtHistory.Text = $"{timeStamp} {line}\n\n" + TxtHistory.Text;
-        }
+    if (!string.IsNullOrEmpty(line))
+    {
+        TxtHistory.Text += $"{timeStamp} {line}\n\n";
+        HistoryScroll.ScrollToEnd();
+    }
+}
 
-        private void LogClimateRegime(string timeStamp, int day, int hour)
-        {
-            if (!TryDescribeClimate(day, hour, out string description) || _climateRegime == description) return;
-            _climateRegime = description;
-            TxtHistory.Text = $"{timeStamp} {description}\n\n" + TxtHistory.Text;
-        }
+private void LogClimateRegime(string timeStamp, int day, int hour)
+{
+    if (!TryDescribeClimate(day, hour, out string description) || _climateRegime == description) return;
+    _climateRegime = description;
+    TxtHistory.Text += $"{timeStamp} {description}\n\n";
+    HistoryScroll.ScrollToEnd();
+}
 
         private bool TryDescribeClimate(out string description)
         {
@@ -1031,7 +1036,7 @@ namespace Greenhouse.UI
 
         private void OnAlertTriggered(string sensorId, double badValue)
         {
-            _currentAlerts.Add($"• {sensorId}: {badValue:F1}");
+            _currentAlerts[sensorId] = $"• {sensorId}: {badValue:F1}";
         }
 
         // --- ГРАФИКА И ОБНОВЛЕНИЕ ЭКРАНА ---
@@ -1146,7 +1151,7 @@ namespace Greenhouse.UI
 
                 if (_currentAlerts.Count > 0)
                 {
-                    TxtAlerts.Text = "ВНИМАНИЕ! ОТКЛОНЕНИЯ:\n" + string.Join("\n", _currentAlerts);
+                    TxtAlerts.Text = "ВНИМАНИЕ! ОТКЛОНЕНИЯ:\n" + string.Join("\n", _currentAlerts.Values);
                     TxtAlerts.Foreground = Brushes.Red;
                 }
                 else

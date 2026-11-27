@@ -54,7 +54,7 @@
                 </GroupBox>
 
                 <GroupBox Header="Журнал действий автоматики" Margin="0,10,0,0" Padding="10" FontWeight="Bold" Height="170">
-                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <ScrollViewer x:Name="HistoryScroll" VerticalScrollBarVisibility="Auto">
                         <TextBlock x:Name="TxtHistory" TextElement.FontWeight="Normal" TextWrapping="Wrap" FontSize="11" Foreground="#333"/>
                     </ScrollViewer>
                 </GroupBox>
