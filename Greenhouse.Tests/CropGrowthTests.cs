@@ -38,7 +38,7 @@ public class CropGrowthTests
     }
 
     [Fact]
-    public void StressStopsAfterYieldReachesZero()
+    public void QuadraticStressDoesNotStackOnAnEmptyCell()
     {
         var config = new SimulationConfig { TempStressFactor = 1.0, HumidityStressFactor = 0.0, PhStressFactor = 0.0 };
         var grid = new EnvironmentGrid(config);
@@ -52,12 +52,13 @@ public class CropGrowthTests
         Fill(grid, 10.0, 70.0, 6.0, 0.0);
         crop.Advance(grid, Phase(), 13, 1, 1.0);
         Assert.Equal(0.0, crop.YieldPotential);
-        double stress = crop.TotalStressIndex;
+        double explained = crop.TotalStressIndex;
 
         crop.Advance(grid, Phase(), 14, 1, 1.0);
 
         Assert.Equal(0.0, crop.YieldPotential);
-        Assert.Equal(stress, crop.TotalStressIndex);
+        double missedHour = 100.0 / (24 * 24);
+        Assert.InRange(crop.TotalStressIndex - explained, missedHour * 0.95, missedHour * 1.05);
     }
 
     [Fact]
@@ -93,12 +94,18 @@ public class CropGrowthTests
         var crop = new CropGrowthModel(config, grid.WidthCells, grid.LengthCells);
         crop.SetPlannedDuration(1);
         crop.Advance(grid, Phase(), 12, 1, 1.0);
+        double grown = crop.YieldPotential;
 
         Fill(grid, 19.0, 70.0, 6.0, 100.0);
         crop.Advance(grid, Phase(), 13, 1, 1.0);
 
-        Assert.True(crop.YieldPotential > 4.0);
-        Assert.Equal(0.0, crop.TotalStressIndex);
+        Assert.True(crop.YieldPotential > grown);
+        Assert.True(crop.ColdStress > 0.5);
+        Assert.Equal(0.0, crop.HeatStress, 3);
+        Assert.Equal(0.0, crop.HumidityStress, 3);
+        Assert.Equal(0.0, crop.PhStress, 3);
+        Assert.Equal(0.0, crop.LightLoss, 3);
+        AssertGapIsExplained(crop);
     }
 
     [Fact]
@@ -114,6 +121,76 @@ public class CropGrowthTests
 
         Assert.True(crop.AccumulatedGdd > 0.5);
         Assert.Equal(0.0, crop.YieldPotential);
+        Assert.InRange(crop.LightLoss, 4.0, 4.3);
+        Assert.Equal(0.0, crop.ColdStress, 3);
+        AssertGapIsExplained(crop);
+    }
+
+    [Fact]
+    public void LossFactorsSumToTheYieldGap()
+    {
+        var config = new SimulationConfig();
+        var grid = new EnvironmentGrid(config);
+        var crop = new CropGrowthModel(config, grid.WidthCells, grid.LengthCells);
+        crop.SetPlannedDuration(1);
+
+        Fill(grid, 22.0, 70.0, 6.0, 100.0);
+        for (int hour = 0; hour < 24; hour++)
+        {
+            crop.Advance(grid, Phase(), hour, 1, 1.0);
+        }
+
+        Assert.InRange(crop.YieldPotential, 99.9, 100.0);
+        Assert.InRange(crop.TotalStressIndex, 0.0, 0.1);
+        AssertGapIsExplained(crop);
+
+        crop.Reset();
+        Fill(grid, 22.0, 70.0, 6.0, 0.0);
+        for (int hour = 0; hour < 24; hour++)
+        {
+            crop.Advance(grid, Phase(), hour, 1, 1.0);
+        }
+
+        Assert.Equal(0.0, crop.YieldPotential);
+        Assert.InRange(crop.LightLoss, 99.9, 100.05);
+        Assert.Equal(0.0, crop.ColdStress, 2);
+        AssertGapIsExplained(crop);
+
+        crop.Reset();
+        Fill(grid, 20.0, 70.0, 6.0, 100.0);
+        for (int hour = 0; hour < 24; hour++)
+        {
+            crop.Advance(grid, Phase(), hour, 1, 1.0);
+        }
+
+        Assert.InRange(crop.YieldPotential, 88.0, 89.0);
+        Assert.InRange(crop.ColdStress, 11.0, 12.0);
+        Assert.Equal(0.0, crop.LightLoss, 2);
+        AssertGapIsExplained(crop);
+
+        crop.Reset();
+        Fill(grid, 22.0, 54.0, 6.0, 100.0);
+        for (int hour = 0; hour < 24; hour++)
+        {
+            crop.Advance(grid, Phase(), hour, 1, 1.0);
+        }
+
+        Assert.InRange(crop.YieldPotential, 49.0, 51.0);
+        Assert.InRange(crop.HumidityStress, 49.0, 51.0);
+        Assert.Equal(0.0, crop.ColdStress, 2);
+        AssertGapIsExplained(crop);
+    }
+
+    private static void AssertGapIsExplained(CropGrowthModel crop)
+    {
+        double explained = crop.YieldPotential
+            + crop.ColdStress
+            + crop.HeatStress
+            + crop.HumidityStress
+            + crop.PhStress
+            + crop.LightLoss
+            + crop.UnfinishedPotential;
+        Assert.InRange(explained, 99.9, 100.1);
     }
 
     private static PlanPhase Phase()

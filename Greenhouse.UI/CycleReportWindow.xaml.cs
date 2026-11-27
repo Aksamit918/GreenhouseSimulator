@@ -60,7 +60,9 @@ namespace Greenhouse.UI
             TxtUniformity.Text = $"Индекс равномерности (UI): {crop.UniformityIndex:F1} %";
             TxtGdd.Text = $"Накопленные градусо-дни (GDD): {crop.AccumulatedGdd:F1}";
             TxtDli.Text = $"Накопленный свет (DLI): {crop.AccumulatedDli:F1}";
-            TxtStress.Text = $"Стресс (Холод/Жара/Влага/pH): {crop.TotalStressIndex:F2}";
+            string losses = DescribeLosses(crop);
+            double gap = Math.Max(0.0, 100.0 - crop.YieldPotential);
+            TxtStress.Text = $"Недобор к 100%: {gap:F1} п.п. ({losses})";
             if (controller.ConflictWarnings.Count == 0)
             {
                 TxtConflicts.Text = "Конфликты осушения и перегрева: не зафиксированы.";
@@ -76,10 +78,22 @@ namespace Greenhouse.UI
             TxtSlaPh.Text = $"pH: {stats.PhSlaPercent:F1} % времени в коридоре";
             TxtSlaLight.Text = $"Свет: {stats.LightSlaPercent:F1} % времени по расписанию";
             TxtAlertCount.Text = $"Аварийных срабатываний датчиков: {stats.TotalAlertsCount}";
-            TxtStressSplit.Text = $"Холод {crop.ColdStress:F2} · Жара {crop.HeatStress:F2} · Влага {crop.HumidityStress:F2} · pH {crop.PhStress:F2}";
+            TxtStressSplit.Text = DescribeLosses(crop);
         }
 
         private void BtnClose_Click(object sender, RoutedEventArgs e) => Close();
+
+        private static string DescribeLosses(CropGrowthModel crop)
+        {
+            string text =
+                $"Холод {crop.ColdStress:F1} · Жара {crop.HeatStress:F1} · Влага {crop.HumidityStress:F1} · pH {crop.PhStress:F1} · Свет {crop.LightLoss:F1}";
+            if (crop.UnfinishedPotential >= 0.05)
+            {
+                text += $" · не доиграно {crop.UnfinishedPotential:F1}";
+            }
+
+            return text;
+        }
 
         private static string CellsWord(int count)
         {

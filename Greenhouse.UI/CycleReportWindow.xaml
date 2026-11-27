@@ -21,7 +21,7 @@
                         <TextBlock x:Name="TxtUniformity" Text="Индекс равномерности (UI): 98%" FontSize="14" Margin="0,5"/>
                         <TextBlock x:Name="TxtGdd" Text="Накопленные градусо-дни (GDD): 120" FontSize="14" Margin="0,5"/>
                         <TextBlock x:Name="TxtDli" Text="Накопленный свет (DLI): 0" FontSize="14" Margin="0,5"/>
-                        <TextBlock x:Name="TxtStress" Text="Общий индекс стресса: 2%" FontSize="14" Foreground="Red" Margin="0,5"/>
+                        <TextBlock x:Name="TxtStress" Text="Недобор к 100%: 0 п.п." FontSize="14" Foreground="Red" Margin="0,5" TextWrapping="Wrap"/>
                         <TextBlock x:Name="TxtConflicts" TextWrapping="Wrap" FontSize="14" Foreground="#E65100" Margin="0,12,0,0"/>
                     </StackPanel>
                 </ScrollViewer>
@@ -36,7 +36,7 @@
                         <TextBlock x:Name="TxtSlaPh" FontSize="14" Margin="0,4"/>
                         <TextBlock x:Name="TxtSlaLight" FontSize="14" Margin="0,4"/>
                         <TextBlock x:Name="TxtAlertCount" FontSize="14" Margin="0,12,0,4"/>
-                        <TextBlock Text="Факторы потерь урожая" FontWeight="Bold" FontSize="16" Margin="0,12,0,8"/>
+                        <TextBlock Text="Факторы потерь урожая, п.п." FontWeight="Bold" FontSize="16" Margin="0,12,0,8"/>
                         <TextBlock x:Name="TxtStressSplit" TextWrapping="Wrap" FontSize="14"/>
                     </StackPanel>
                 </ScrollViewer>
