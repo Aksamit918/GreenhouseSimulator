@@ -3,6 +3,7 @@ using GreenhouseSimulator.Core.Models.Actuators;
 using GreenhouseSimulator.Core.Models.Sensors;
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
@@ -20,14 +21,16 @@ namespace Greenhouse.UI
         private FrameworkElement? _selectedElement;
         private Point _clickOffset;
         private bool _existingPlaced;
+        private bool _updatingProps;
 
-        // Временное хранилище для новых объектов до сохранения
         private List<object> _newDevices = new List<object>();
+        private readonly List<Ellipse> _radiusVisuals = new List<Ellipse>();
 
         public LayoutEditorWindow(GreenhouseModel greenhouse)
         {
             _greenhouse = greenhouse ?? throw new ArgumentNullException(nameof(greenhouse));
             InitializeComponent();
+            PropRadius.TextChanged += PropRadius_TextChanged;
             Loaded += (_, _) =>
             {
                 FitPlanToHall();
@@ -75,9 +78,10 @@ namespace Greenhouse.UI
                 Canvas.SetLeft(element, (left + element.Width / 2) * ratioX - element.Width / 2);
                 Canvas.SetTop(element, (top + element.Height / 2) * ratioY - element.Height / 2);
             }
+
+            UpdateRadiusVisuals();
         }
 
-        // --- DRAG AND DROP ---
         private void PaletteItem_MouseDown(object sender, MouseButtonEventArgs e)
         {
             if (sender is Button btn && btn.Tag != null)
@@ -97,26 +101,25 @@ namespace Greenhouse.UI
             if (string.IsNullOrWhiteSpace(itemType)) return;
 
             Point dropPosition = e.GetPosition(EditorCanvas);
-            
-            // СРАЗУ создаем реальный объект, чтобы можно было редактировать его свойства!
+
             double simX = dropPosition.X / EditorCanvas.ActualWidth * _greenhouse.Width;
             double simY = dropPosition.Y / EditorCanvas.ActualHeight * _greenhouse.Length;
             object? newDevice = InstantiateDevice(itemType, (Math.Max(0, simX), Math.Max(0, simY)));
-            
+
             if (newDevice != null)
             {
                 _newDevices.Add(newDevice);
                 FrameworkElement? visualItem = CreateVisualItem(itemType);
                 if (visualItem != null)
                 {
-                    visualItem.Tag = newDevice; // Привязываем РЕАЛЬНЫЙ объект
+                    visualItem.Tag = newDevice;
                     PlaceVisual(visualItem, dropPosition.X, dropPosition.Y);
+                    UpdateRadiusVisuals();
                 }
             }
             e.Handled = true;
         }
 
-        // --- МЫШЬ НА ХОЛСТЕ ---
         private void PlacedItem_MouseDown(object sender, MouseButtonEventArgs e)
         {
             if (sender is not FrameworkElement element) return;
@@ -135,16 +138,16 @@ namespace Greenhouse.UI
             Canvas.SetTop(_draggedElement, mousePos.Y - _clickOffset.Y);
         }
 
-        private void EditorCanvas_MouseUp(object sender, MouseButtonEventArgs e)
+        private void EditorCanvas_MouseUp(object sender, MouseEventArgs e)
         {
             if (_draggedElement != null)
             {
                 _draggedElement.ReleaseMouseCapture();
                 _draggedElement = null;
+                UpdateRadiusVisuals();
             }
         }
 
-        // --- ВЫДЕЛЕНИЕ И ПАНЕЛЬ СВОЙСТВ (DEV-06) ---
         private void SelectVisual(FrameworkElement visual)
         {
             if (_selectedElement != null) _selectedElement.Opacity = 1;
@@ -152,34 +155,51 @@ namespace Greenhouse.UI
             visual.Opacity = 0.55;
             BtnRemoveSelected.IsEnabled = true;
 
-            // Заполняем правую панель
             PropertiesPanel.IsEnabled = true;
             object? device = visual.Tag;
-            
+
             ActuatorProps.Visibility = Visibility.Collapsed;
             LightProps.Visibility = Visibility.Collapsed;
             SensorProps.Visibility = Visibility.Collapsed;
 
-            if (device is Actuator act)
+            _updatingProps = true;
+            try
             {
-                TxtPropsTarget.Text = act.GetType().Name;
-                ActuatorProps.Visibility = Visibility.Visible;
-                PropMaxPower.Text = act.MaxPower.ToString("0.##");
-                PropRadius.Text = act.EffectiveRadius.ToString("0.##");
-                PropWarmup.Text = act.WarmupTimeHours.ToString("0.##");
-
-                if (device is LightingSystem ls)
+                if (device is Actuator act)
                 {
-                    LightProps.Visibility = Visibility.Visible;
-                    PropEfficiency.Text = ls.Efficiency.ToString("0.##");
+                    TxtPropsTarget.Text = act.GetType().Name;
+                    ActuatorProps.Visibility = Visibility.Visible;
+                    PropMaxPower.Text = act.MaxPower.ToString("0.##", CultureInfo.InvariantCulture);
+                    PropRadius.Text = act.EffectiveRadius.ToString("0.##", CultureInfo.InvariantCulture);
+                    PropWarmup.Text = act.WarmupTimeHours.ToString("0.##", CultureInfo.InvariantCulture);
+
+                    if (device is LightingSystem ls)
+                    {
+                        LightProps.Visibility = Visibility.Visible;
+                        PropEfficiency.Text = ls.Efficiency.ToString("0.##", CultureInfo.InvariantCulture);
+                    }
+                }
+                else if (device is ActiveSensor sens)
+                {
+                    TxtPropsTarget.Text = sens.Type.ToString() + " Sensor";
+                    SensorProps.Visibility = Visibility.Visible;
+                    PropNoise.Text = sens.SensorNoiseSigma.ToString("0.##", CultureInfo.InvariantCulture);
+                    PropHysteresis.Text = sens.Hysteresis.ToString("0.##", CultureInfo.InvariantCulture);
                 }
             }
-            else if (device is ActiveSensor sens)
+            finally
             {
-                TxtPropsTarget.Text = sens.Type.ToString() + " Sensor";
-                SensorProps.Visibility = Visibility.Visible;
-                PropNoise.Text = sens.SensorNoiseSigma.ToString("0.##");
-                PropHysteresis.Text = sens.Hysteresis.ToString("0.##");
+                _updatingProps = false;
+            }
+        }
+
+        private void PropRadius_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            if (_updatingProps || _selectedElement?.Tag is not Actuator act) return;
+            if (TryParseNumber(PropRadius.Text, out double radius) && radius >= 0)
+            {
+                act.EffectiveRadius = radius;
+                UpdateRadiusVisuals();
             }
         }
 
@@ -192,17 +212,19 @@ namespace Greenhouse.UI
             {
                 if (device is Actuator act)
                 {
-                    act.MaxPower = double.Parse(PropMaxPower.Text.Replace(".", ","));
-                    act.EffectiveRadius = double.Parse(PropRadius.Text.Replace(".", ","));
-                    act.WarmupTimeHours = double.Parse(PropWarmup.Text.Replace(".", ","));
+                    act.MaxPower = ParseNumber(PropMaxPower.Text);
+                    act.EffectiveRadius = ParseNumber(PropRadius.Text);
+                    act.WarmupTimeHours = ParseNumber(PropWarmup.Text);
 
                     if (device is LightingSystem ls)
-                        ls.Efficiency = double.Parse(PropEfficiency.Text.Replace(".", ","));
+                        ls.Efficiency = ParseNumber(PropEfficiency.Text);
+
+                    UpdateRadiusVisuals();
                 }
                 else if (device is ActiveSensor sens)
                 {
-                    sens.SensorNoiseSigma = double.Parse(PropNoise.Text.Replace(".", ","));
-                    sens.Hysteresis = double.Parse(PropHysteresis.Text.Replace(".", ","));
+                    sens.SensorNoiseSigma = ParseNumber(PropNoise.Text);
+                    sens.Hysteresis = ParseNumber(PropHysteresis.Text);
                 }
                 MessageBox.Show("Свойства обновлены!", "Успех", MessageBoxButton.OK, MessageBoxImage.Information);
             }
@@ -226,10 +248,10 @@ namespace Greenhouse.UI
                 TxtPropsTarget.Text = "Ничего не выбрано";
                 _selectedElement = null;
                 BtnRemoveSelected.IsEnabled = false;
+                UpdateRadiusVisuals();
             }
         }
 
-        // --- СОХРАНЕНИЕ ---
         private void BtnSaveLayout_Click(object sender, RoutedEventArgs e)
         {
             ApplyLayout();
@@ -247,7 +269,7 @@ namespace Greenhouse.UI
                 if (child is not FrameworkElement element || element.Tag == null) continue;
 
                 (double X, double Y) location = ToGreenhousePoint(element);
-                
+
                 if (element.Tag is Sensor sensor)
                 {
                     sensor.MoveTo(location);
@@ -262,7 +284,6 @@ namespace Greenhouse.UI
                 }
             }
 
-            // Удаляем то, что стерли с холста
             foreach (Sensor sensor in _greenhouse.GetAllSensors().ToList())
                 if (!keptSensors.Contains(sensor)) _greenhouse.RemoveSensor(sensor);
 
@@ -270,7 +291,6 @@ namespace Greenhouse.UI
                 if (!keptActuators.Contains(actuator)) _greenhouse.RemoveActuator(actuator);
         }
 
-        // --- ИНИЦИАЛИЗАЦИЯ СТАРЫХ ---
         private void PlaceExistingDevices()
         {
             if (_existingPlaced || EditorCanvas.ActualWidth <= 0) return;
@@ -278,6 +298,7 @@ namespace Greenhouse.UI
 
             foreach (Sensor sensor in _greenhouse.GetAllSensors()) PlaceModel(sensor, sensor.Location);
             foreach (Actuator actuator in _greenhouse.GetAllActuators()) PlaceModel(actuator, actuator.Location);
+            UpdateRadiusVisuals();
         }
 
         private void PlaceModel(object device, (double X, double Y) location)
@@ -287,7 +308,7 @@ namespace Greenhouse.UI
             FrameworkElement? visual = CreateVisualItem(kind);
             if (visual == null) return;
 
-            visual.Tag = device; // Связь
+            visual.Tag = device;
             double x = location.X / _greenhouse.Width * EditorCanvas.ActualWidth;
             double y = location.Y / _greenhouse.Length * EditorCanvas.ActualHeight;
             PlaceVisual(visual, x, y);
@@ -300,6 +321,52 @@ namespace Greenhouse.UI
             Canvas.SetLeft(visual, centerX - visual.Width / 2);
             Canvas.SetTop(visual, centerY - visual.Height / 2);
             EditorCanvas.Children.Add(visual);
+        }
+
+        private void UpdateRadiusVisuals()
+        {
+            foreach (Ellipse circle in _radiusVisuals)
+            {
+                EditorCanvas.Children.Remove(circle);
+            }
+            _radiusVisuals.Clear();
+
+            if (EditorCanvas.ActualWidth <= 0 || EditorCanvas.ActualHeight <= 0 || _greenhouse.Width <= 0 || _greenhouse.Length <= 0)
+                return;
+
+            double scaleX = EditorCanvas.ActualWidth / _greenhouse.Width;
+            double scaleY = EditorCanvas.ActualHeight / _greenhouse.Length;
+
+            foreach (FrameworkElement element in EditorCanvas.Children.OfType<FrameworkElement>().ToList())
+            {
+                if (element.Tag is not Actuator act || act.EffectiveRadius <= 0) continue;
+
+                double left = Canvas.GetLeft(element);
+                double top = Canvas.GetTop(element);
+                if (double.IsNaN(left) || double.IsNaN(top)) continue;
+
+                double centerX = left + element.Width / 2;
+                double centerY = top + element.Height / 2;
+                double rx = act.EffectiveRadius * scaleX;
+                double ry = act.EffectiveRadius * scaleY;
+
+                var circle = new Ellipse
+                {
+                    Width = rx * 2,
+                    Height = ry * 2,
+                    Stroke = new SolidColorBrush(Color.FromArgb(140, 33, 150, 243)),
+                    StrokeThickness = 1.5,
+                    StrokeDashArray = new DoubleCollection { 4, 3 },
+                    Fill = new SolidColorBrush(Color.FromArgb(28, 33, 150, 243)),
+                    IsHitTestVisible = false
+                };
+
+                Panel.SetZIndex(circle, -1);
+                Canvas.SetLeft(circle, centerX - rx);
+                Canvas.SetTop(circle, centerY - ry);
+                EditorCanvas.Children.Add(circle);
+                _radiusVisuals.Add(circle);
+            }
         }
 
         private (double X, double Y) ToGreenhousePoint(FrameworkElement element)
@@ -315,7 +382,6 @@ namespace Greenhouse.UI
             return (Math.Clamp(x, 0, _greenhouse.Width), Math.Clamp(y, 0, _greenhouse.Length));
         }
 
-        // --- ФАБРИКИ ---
         private object? InstantiateDevice(string kind, (double X, double Y) location)
         {
             return kind switch
@@ -371,9 +437,10 @@ namespace Greenhouse.UI
                     b.Child = new TextBlock { Text = "Обогрев", FontSize = 11, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Foreground = Brushes.Black };
                     return b;
                 case "Actuator_AC":
-                    Border outer = new Border { Width = 30, Height = 90, Background = Brushes.White, BorderBrush = new SolidColorBrush(Color.FromRgb(100, 180, 200)), BorderThickness = new Thickness(3), CornerRadius = new CornerRadius(3), Effect = GetShadow() };
-                    TextBlock tb = new TextBlock { Text = "Кондей", FontSize = 11, Foreground = Brushes.Black, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, LayoutTransform = new RotateTransform(-90) };
-                    outer.Child = tb; return outer;
+                    Border outer = new Border { Width = 100, Height = 30, Background = Brushes.White, BorderBrush = new SolidColorBrush(Color.FromRgb(100, 180, 200)), BorderThickness = new Thickness(3), CornerRadius = new CornerRadius(3), Effect = GetShadow() };
+                    TextBlock tb = new TextBlock { Text = "Кондиционер", FontSize = 11, Foreground = Brushes.Black, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+                    outer.Child = tb;
+                    return outer;
                 case "Actuator_Humidifier":
                     Grid gh = new Grid { Width = 40, Height = 40, Effect = GetShadow() };
                     gh.Children.Add(new Polygon { Points = new PointCollection(new[] { new Point(10, 0), new Point(30, 0), new Point(40, 35), new Point(0, 35) }), Fill = new SolidColorBrush(Color.FromRgb(130, 90, 160)) });
@@ -396,6 +463,12 @@ namespace Greenhouse.UI
             g.Children.Add(new TextBlock { Text = text, Foreground = new SolidColorBrush(darkText ? Colors.Black : Colors.White), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, FontSize = 12, FontWeight = FontWeights.Bold });
             return g;
         }
+
+        private static double ParseNumber(string text) =>
+            double.Parse(text.Trim().Replace(',', '.'), NumberStyles.Float, CultureInfo.InvariantCulture);
+
+        private static bool TryParseNumber(string text, out double value) =>
+            double.TryParse(text.Trim().Replace(',', '.'), NumberStyles.Float, CultureInfo.InvariantCulture, out value);
 
         private LinearGradientBrush GetGradient(Color t, Color b) => new LinearGradientBrush(t, b, new Point(0, 0), new Point(0, 1));
         private DropShadowEffect GetShadow() => new DropShadowEffect { Color = Colors.Black, Direction = 315, ShadowDepth = 3, BlurRadius = 4, Opacity = 0.5 };
