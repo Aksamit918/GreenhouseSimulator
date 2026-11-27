@@ -54,6 +54,9 @@ namespace Greenhouse.UI
         private int[] _rowHigh = Array.Empty<int>();
         private double[] _rowWeight = Array.Empty<double>();
         private readonly double[] _rampStops = new double[7];
+        private readonly double[] _rampFromStops = new double[7];
+        private readonly double[] _shownStops = new double[7];
+        private int _rampCount;
         private readonly Color[] _rampColors = new Color[7];
         private readonly int[] _rampTable = new int[RampResolution];
         private double _rampMin;
@@ -174,20 +177,27 @@ namespace Greenhouse.UI
             _heatmapImage.Height = fieldHeight;
 
             int rampCount = BuildRamp(mode, _rampStops, _rampColors);
-            BuildRampTable(rampCount);
             SampleLayer(mode, grid);
-            UpdateLegend(mode, rampCount);
 
             if (resized || mode != _heatmapMode)
             {
                 _heatmapMode = mode;
+                _rampCount = rampCount;
                 StopBlend();
+                Array.Copy(_rampStops, _rampFromStops, rampCount);
+                Array.Copy(_rampStops, _shownStops, rampCount);
+                BuildRampTable(_shownStops, rampCount);
                 Array.Copy(_blendTo, _shownValues, _blendTo.Length);
+                UpdateLegend(mode, rampCount);
                 PaintHeatmap();
                 return;
             }
 
+            // A new corridor must not recolour the hall before the temperatures have moved.
+            Array.Copy(_shownStops, _rampFromStops, _rampCount);
+            _rampCount = rampCount;
             Array.Copy(_shownValues, _blendFrom, _shownValues.Length);
+            UpdateLegend(mode, rampCount);
             StartBlend();
         }
 
@@ -233,6 +243,19 @@ namespace Greenhouse.UI
         {
             double t = Math.Min(1.0, _blendClock.Elapsed.TotalMilliseconds / HeatmapBlendMilliseconds);
             double eased = t * t * (3.0 - 2.0 * t);
+            bool stopsMoved = false;
+            for (int s = 0; s < _rampCount; s++)
+            {
+                double stop = _rampFromStops[s] + (_rampStops[s] - _rampFromStops[s]) * eased;
+                stopsMoved |= Math.Abs(stop - _shownStops[s]) > 1e-6;
+                _shownStops[s] = stop;
+            }
+
+            if (stopsMoved)
+            {
+                BuildRampTable(_shownStops, _rampCount);
+            }
+
             for (int k = 0; k < _shownValues.Length; k++)
             {
                 _shownValues[k] = _blendFrom[k] + (_blendTo[k] - _blendFrom[k]) * eased;
@@ -242,6 +265,7 @@ namespace Greenhouse.UI
             if (t >= 1.0)
             {
                 StopBlend();
+                UpdateLegend(_heatmapMode, _rampCount);
             }
         }
 
@@ -290,13 +314,13 @@ namespace Greenhouse.UI
             return _rampTable[index];
         }
 
-        private void BuildRampTable(int count)
+        private void BuildRampTable(double[] stops, int count)
         {
-            _rampMin = _rampStops[0];
-            _rampScale = (RampResolution - 1) / Math.Max(1e-6, _rampStops[count - 1] - _rampMin);
+            _rampMin = stops[0];
+            _rampScale = (RampResolution - 1) / Math.Max(1e-6, stops[count - 1] - _rampMin);
             for (int k = 0; k < RampResolution; k++)
             {
-                Color color = MapRamp(_rampMin + k / _rampScale, _rampStops, _rampColors, count);
+                Color color = MapRamp(_rampMin + k / _rampScale, stops, _rampColors, count);
                 _rampTable[k] = (255 << 24) | (color.R << 16) | (color.G << 8) | color.B;
             }
         }
@@ -307,22 +331,22 @@ namespace Greenhouse.UI
             bool scaleChanged = mode != _legendMode || count != _legendCount;
             for (int k = 0; k < count && !scaleChanged; k++)
             {
-                scaleChanged = Math.Abs(_legendStops[k] - _rampStops[k]) > 1e-9;
+                scaleChanged = Math.Abs(_legendStops[k] - _shownStops[k]) > 1e-9;
             }
 
             if (scaleChanged)
             {
                 _legendMode = mode;
                 _legendCount = count;
-                Array.Copy(_rampStops, _legendStops, count);
+                Array.Copy(_shownStops, _legendStops, count);
                 TxtLegendTitle.Text = LayerTitle(mode);
 
-                double first = _rampStops[0];
-                double span = Math.Max(1e-6, _rampStops[count - 1] - first);
+                double first = _shownStops[0];
+                double span = Math.Max(1e-6, _shownStops[count - 1] - first);
                 var gradient = new LinearGradientBrush { StartPoint = new Point(0, 0.5), EndPoint = new Point(1, 0.5) };
                 for (int k = 0; k < count; k++)
                 {
-                    gradient.GradientStops.Add(new GradientStop(_rampColors[k], (_rampStops[k] - first) / span));
+                    gradient.GradientStops.Add(new GradientStop(_rampColors[k], (_shownStops[k] - first) / span));
                 }
 
                 gradient.Freeze();
